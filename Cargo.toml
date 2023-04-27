@@ -1,5 +1,8 @@
 [workspace]
-members = ["crates/*"]
+members = [
+  "crates/kernel",
+  "crates/boot/limine",
+]
 resolver = "2"
 
 [workspace.package]

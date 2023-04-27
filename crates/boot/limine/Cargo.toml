@@ -1,7 +1,6 @@
 [package]
-name = "neodym"
+name = "nd_limine"
 version = "0.0.1"
-description = "The Neodym Operating System"
 
 authors.workspace = true
 edition.workspace = true
