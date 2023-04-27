@@ -1,0 +1,10 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+authors = ["Nils Mathieu <nils.mathieu.contact@gmail.com>"]
+license = "MIT"
+readme = "../../README.md"
+repository = "https://github.com/nils-mathieu/neodym"
