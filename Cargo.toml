@@ -2,6 +2,7 @@
 members = [
   "crates/kernel",
   "crates/boot/limine",
+  "crates/arch/x86_64",
 ]
 resolver = "2"
 

@@ -4,10 +4,12 @@
 ///
 /// This function can be called when an unrecoverable error occurs.
 pub fn die() -> ! {
-    use core::arch::asm;
-
     unsafe {
-        asm!("cli; hlt", options(noreturn));
+        nd_x86_64::cli();
+
+        loop {
+            nd_x86_64::hlt();
+        }
     }
 }
 
