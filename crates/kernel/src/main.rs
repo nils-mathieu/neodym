@@ -15,6 +15,8 @@
 
 #![no_std]
 #![no_main]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![feature(used_with_arg)]
 
 mod arch;
 mod boot;

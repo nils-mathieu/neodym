@@ -11,6 +11,12 @@
 //! protocol.
 
 #![no_std]
+#![warn(missing_debug_implementations)]
+#![warn(missing_docs)]
+
+mod entry_point;
+
+pub use self::entry_point::*;
 
 use core::{fmt, mem::MaybeUninit};
 
@@ -39,6 +45,9 @@ impl<T> fmt::Debug for ResponsePtr<T> {
         fmt::Debug::fmt(&self.0, f)
     }
 }
+
+unsafe impl<T: Sync> Sync for ResponsePtr<T> {}
+unsafe impl<T: Send> Send for ResponsePtr<T> {}
 
 /// A limine request.
 #[repr(C)]
@@ -240,4 +249,31 @@ pub trait Feature {
     const EXPECTED_REVISION: u64;
     /// The response type of this request.
     type Response;
+}
+
+/// Create a global `.limine_reqs` section with pointers to the provided structs.
+#[macro_export]
+macro_rules! limine_reqs {
+    (
+        $(
+            $place:expr
+        ),*
+        $(,)?
+    ) => {
+        const _: () = {
+            #[link_section = ".limine_reqs"]
+            #[used(linker)]
+            static mut LIMINE_REQS: [*const (); 1 + $crate::limine_reqs!(@ count => $($place,)*)]
+                = [
+                    $( ::core::ptr::addr_of!($place) as *const (), )*
+                    ::core::ptr::null(),
+                ];
+        };
+    };
+    ( @ count => $( $place:expr, )* ) => {
+        [ $( $crate::limine_reqs!( @ replace => $place, ()) )* ].len()
+    };
+    ( @ replace => $place:expr, $($by:tt)* ) => {
+        $($by)*
+    };
 }
