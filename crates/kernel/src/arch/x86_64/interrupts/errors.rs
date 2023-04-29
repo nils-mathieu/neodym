@@ -74,3 +74,7 @@ pub extern "x86-interrupt" fn vmm_communication_exception(_: InterruptStackFrame
 pub extern "x86-interrupt" fn security_exception(_: InterruptStackFrame, _: u64) {
     panic!("Security Exception");
 }
+
+pub extern "x86-interrupt" fn bound_range_exceeded(_: InterruptStackFrame) {
+    panic!("Bound Range Exceeded");
+}

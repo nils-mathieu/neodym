@@ -1,6 +1,6 @@
 use nd_x86_64::{
-    CpuException, DescriptorTable, GateDescriptor, GateType, Idt, IstIndex, PrivilegeLevel,
-    SegmentDescriptor, SegmentSelector, TablePtr, Tss, VirtAddr,
+    DescriptorTable, GateType, Idt, IstIndex, PrivilegeLevel, SegmentDescriptor, SegmentSelector,
+    TablePtr, Tss, VirtAddr,
 };
 
 /// The global descriptor table that we are going to load. We can't use a simple array because some
@@ -81,49 +81,147 @@ pub unsafe fn initialize() {
             PrivilegeLevel::Ring0,
         ));
 
-        let trap = |addr: VirtAddr| {
-            GateDescriptor::new(addr, cs, None, GateType::Trap, PrivilegeLevel::Ring0, true)
-        };
-
         // Initialize the IDT.
-        IDT[CpuException::DoubleFault] = GateDescriptor::new(
-            super::interrupts::double_fault as usize as u64,
+        IDT.set_division_error(
+            super::interrupts::division_error,
             cs,
-            Some(IstIndex::One),
+            None,
             GateType::Trap,
             PrivilegeLevel::Ring0,
-            true,
         );
-        IDT[CpuException::InvalidOpCode] = trap(super::interrupts::invalid_op_code as usize as u64);
-        IDT[CpuException::DeviceNotAvailable] =
-            trap(super::interrupts::device_not_available as usize as u64);
-        IDT[CpuException::SegmentNotPresent] =
-            trap(super::interrupts::segment_not_present as usize as u64);
-        IDT[CpuException::StackSegmentFault] =
-            trap(super::interrupts::stack_segment_fault as usize as u64);
-        IDT[CpuException::GeneralProtectionFault] =
-            trap(super::interrupts::general_protection_fault as usize as u64);
-        IDT[CpuException::PageFault] = trap(super::interrupts::page_fault as usize as u64);
-        IDT[CpuException::DivisionError] = trap(super::interrupts::division_error as usize as u64);
-        IDT[CpuException::InvalidTSS] = trap(super::interrupts::invalid_tss as usize as u64);
-        IDT[CpuException::X87FloatingPointException] =
-            trap(super::interrupts::x87_floating_point_exception as usize as u64);
-        IDT[CpuException::AlignmentCheck] =
-            trap(super::interrupts::alignment_check as usize as u64);
-        IDT[CpuException::MachineCheck] = trap(super::interrupts::machine_check as usize as u64);
-        IDT[CpuException::SimdFloatingPointException] =
-            trap(super::interrupts::simd_floating_point_exception as usize as u64);
-        IDT[CpuException::VirtualizationException] =
-            trap(super::interrupts::virtualization_exception as usize as u64);
-        IDT[CpuException::ControlProtectionException] =
-            trap(super::interrupts::control_protection_exception as usize as u64);
-        IDT[CpuException::HypervisorInjectionException] =
-            trap(super::interrupts::hypervisor_injection_exception as usize as u64);
-        IDT[CpuException::VmmCommunicationException] =
-            trap(super::interrupts::vmm_communication_exception as usize as u64);
-        IDT[CpuException::SecurityException] =
-            trap(super::interrupts::security_exception as usize as u64);
-        IDT[CpuException::Breakpoint] = trap(super::interrupts::breakpoint as usize as u64);
+        IDT.set_breakpoint(
+            super::interrupts::breakpoint,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_bound_range_exceeded(
+            super::interrupts::bound_range_exceeded,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_invalid_op_code(
+            super::interrupts::invalid_op_code,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_device_not_available(
+            super::interrupts::device_not_available,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_double_fault(
+            super::interrupts::double_fault,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_invalid_tss(
+            super::interrupts::invalid_tss,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_segment_not_present(
+            super::interrupts::segment_not_present,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_stack_segment_fault(
+            super::interrupts::stack_segment_fault,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_general_protection_fault(
+            super::interrupts::general_protection_fault,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_page_fault(
+            super::interrupts::page_fault,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_x87_floating_point_exception(
+            super::interrupts::x87_floating_point_exception,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_alignment_check(
+            super::interrupts::alignment_check,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_machine_check(
+            super::interrupts::machine_check,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_simd_floating_point_exception(
+            super::interrupts::simd_floating_point_exception,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_virtualization_exception(
+            super::interrupts::virtualization_exception,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_control_protection_exception(
+            super::interrupts::control_protection_exception,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_hypervisor_injection_exception(
+            super::interrupts::hypervisor_injection_exception,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_vmm_communication_exception(
+            super::interrupts::vmm_communication_exception,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
+        IDT.set_security_exception(
+            super::interrupts::security_exception,
+            cs,
+            None,
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
 
         nd_x86_64::lidt(&IDT.table_ptr());
     }

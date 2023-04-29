@@ -174,6 +174,29 @@ impl fmt::Debug for GateDescriptor {
     }
 }
 
+macro_rules! exception_setters {
+    (
+        $(
+            [$index:expr]
+            fn $fn_name:ident ( $( $args:ty ),* ) $( -> $ret:ty)?;
+        )*
+    ) => {
+        $(
+            #[doc = concat!("Sets the *Interrupt Service Routine* to be called when the [`", stringify!($index), "`] exception occurs.")]
+            pub fn $fn_name(&mut self, handler: extern "x86-interrupt" fn($( $args ),* ) $( -> $ret )?, cs: SegmentSelector, ist: Option<IstIndex>, ty: GateType, dpl: PrivilegeLevel) {
+                self[$index] = GateDescriptor::new(
+                    handler as usize as u64,
+                    cs,
+                    ist,
+                    ty,
+                    dpl,
+                    true,
+                );
+            }
+        )*
+    };
+}
+
 /// An [Interrupt Descriptor Table](https://wiki.osdev.org/IDT).
 ///
 /// # Representation
@@ -202,6 +225,55 @@ impl Idt {
             base: self as *const Self as usize as u64,
         }
     }
+
+    exception_setters!(
+        [CpuException::DivisionError]
+        fn set_division_error(InterruptStackFrame);
+        [CpuException::Debug]
+        fn set_debug(InterruptStackFrame);
+        [CpuException::NonMaskableInterrupt]
+        fn set_non_maskable_interrupt(InterruptStackFrame);
+        [CpuException::Breakpoint]
+        fn set_breakpoint(InterruptStackFrame);
+        [CpuException::Overflow]
+        fn set_overflow(InterruptStackFrame);
+        [CpuException::BoundRangeExceeded]
+        fn set_bound_range_exceeded(InterruptStackFrame);
+        [CpuException::InvalidOpCode]
+        fn set_invalid_op_code(InterruptStackFrame);
+        [CpuException::DeviceNotAvailable]
+        fn set_device_not_available(InterruptStackFrame);
+        [CpuException::DoubleFault]
+        fn set_double_fault(InterruptStackFrame, u64) -> !;
+        [CpuException::InvalidTSS]
+        fn set_invalid_tss(InterruptStackFrame, TableEntryError);
+        [CpuException::SegmentNotPresent]
+        fn set_segment_not_present(InterruptStackFrame, TableEntryError);
+        [CpuException::StackSegmentFault]
+        fn set_stack_segment_fault(InterruptStackFrame, TableEntryError);
+        [CpuException::GeneralProtectionFault]
+        fn set_general_protection_fault(InterruptStackFrame, TableEntryError);
+        [CpuException::PageFault]
+        fn set_page_fault(InterruptStackFrame, PageFaultError);
+        [CpuException::X87FloatingPointException]
+        fn set_x87_floating_point_exception(InterruptStackFrame);
+        [CpuException::AlignmentCheck]
+        fn set_alignment_check(InterruptStackFrame, u64);
+        [CpuException::MachineCheck]
+        fn set_machine_check(InterruptStackFrame) -> !;
+        [CpuException::SimdFloatingPointException]
+        fn set_simd_floating_point_exception(InterruptStackFrame);
+        [CpuException::VirtualizationException]
+        fn set_virtualization_exception(InterruptStackFrame);
+        [CpuException::ControlProtectionException]
+        fn set_control_protection_exception(InterruptStackFrame, u64);
+        [CpuException::HypervisorInjectionException]
+        fn set_hypervisor_injection_exception(InterruptStackFrame);
+        [CpuException::VmmCommunicationException]
+        fn set_vmm_communication_exception(InterruptStackFrame, u64);
+        [CpuException::SecurityException]
+        fn set_security_exception(InterruptStackFrame, u64);
+    );
 }
 
 /// A specific [CPU Exception](https://wiki.osdev.org/Exceptions).
