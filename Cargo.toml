@@ -3,6 +3,7 @@ members = [
   "crates/kernel",
   "crates/boot/limine",
   "crates/arch/x86_64",
+  "crates/utility/log",
 ]
 resolver = "2"
 
