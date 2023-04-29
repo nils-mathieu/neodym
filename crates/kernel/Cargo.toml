@@ -9,6 +9,9 @@ readme.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[dependencies]
+nd_log = { path = "../utility/log" }
+
 [target.'cfg(any(target_arch = "x86_64", target_arch = "aarch64"))'.dependencies]
 nd_limine = { path = "../boot/limine" }
 

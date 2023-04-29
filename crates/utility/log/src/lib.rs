@@ -4,7 +4,6 @@
 #![warn(missing_docs, missing_debug_implementations)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use core::fmt;
 use core::fmt::Arguments;
 use core::sync::atomic::AtomicPtr;
 use core::sync::atomic::Ordering::Relaxed;
@@ -46,12 +45,10 @@ macro_rules! record {
 }
 
 /// The signature of the function that will be called when a [`Record`] needs to be logged.
-pub type LoggerFn = fn(record: &Record) -> fmt::Result;
+pub type LoggerFn = fn(record: &Record);
 
 /// The default logging function.
-fn noop_logger(_record: &Record) -> fmt::Result {
-    Err(fmt::Error)
-}
+fn noop_logger(_record: &Record) {}
 
 /// An atomic [`LoggerFn`] which is used to log messages.
 static GLOBAL_LOGGER: AtomicPtr<u8> = AtomicPtr::new(noop_logger as *mut u8);
@@ -78,18 +75,11 @@ pub fn get_global_logger() -> LoggerFn {
     unsafe { core::mem::transmute(p) }
 }
 
-/// The function that is called by the [`log`] macro.
-#[inline(always)]
-#[doc(hidden)]
-pub fn __log(record: &Record) {
-    let _ = get_global_logger()(record);
-}
-
 /// Logs a message using the global logger.
 #[macro_export]
 macro_rules! log {
     ($verbosity:expr, $($args:tt)*) => {
-        $crate::__log(&$crate::record!($verbosity, $($args)*))
+        $crate::get_global_logger()(&$crate::record!($verbosity, $($args)*))
     };
 }
 

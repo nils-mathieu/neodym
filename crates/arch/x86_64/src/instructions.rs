@@ -47,6 +47,7 @@ pub unsafe fn inb(port: u16) -> u8 {
 /// References a table which may be loaded into the CPU with instructions such as [`lidt`] or
 /// [`lgdt`].
 #[repr(packed)]
+#[derive(Debug, Clone, Copy)]
 pub struct TablePtr {
     /// The size of the table, usually minus one.
     pub limit: u16,
