@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use crate::SegmentSelector;
 
 use core::arch::asm;

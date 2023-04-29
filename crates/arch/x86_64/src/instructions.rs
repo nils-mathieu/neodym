@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use core::arch::asm;
 
 use crate::{SegmentSelector, VirtAddr};

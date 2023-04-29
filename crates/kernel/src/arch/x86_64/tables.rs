@@ -82,145 +82,67 @@ pub unsafe fn initialize() {
         ));
 
         // Initialize the IDT.
-        IDT.set_division_error(
-            super::interrupts::division_error,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        macro_rules! set_idt_handler {
+            ($f:ident, $handler:expr) => {
+                IDT.$f($handler, cs, None, GateType::Trap, PrivilegeLevel::Ring0);
+            };
+        }
+
+        set_idt_handler!(set_division_error, super::interrupts::division_error);
+        set_idt_handler!(set_breakpoint, super::interrupts::breakpoint);
+        set_idt_handler!(
+            set_bound_range_exceeded,
+            super::interrupts::bound_range_exceeded
         );
-        IDT.set_breakpoint(
-            super::interrupts::breakpoint,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(set_invalid_op_code, super::interrupts::invalid_op_code);
+        set_idt_handler!(
+            set_device_not_available,
+            super::interrupts::device_not_available
         );
-        IDT.set_bound_range_exceeded(
-            super::interrupts::bound_range_exceeded,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(set_double_fault, super::interrupts::double_fault);
+        set_idt_handler!(set_invalid_tss, super::interrupts::invalid_tss);
+        set_idt_handler!(
+            set_segment_not_present,
+            super::interrupts::segment_not_present
         );
-        IDT.set_invalid_op_code(
-            super::interrupts::invalid_op_code,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(
+            set_stack_segment_fault,
+            super::interrupts::stack_segment_fault
         );
-        IDT.set_device_not_available(
-            super::interrupts::device_not_available,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(
+            set_general_protection_fault,
+            super::interrupts::general_protection_fault
         );
-        IDT.set_double_fault(
-            super::interrupts::double_fault,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(set_page_fault, super::interrupts::page_fault);
+        set_idt_handler!(
+            set_x87_floating_point_exception,
+            super::interrupts::x87_floating_point_exception
         );
-        IDT.set_invalid_tss(
-            super::interrupts::invalid_tss,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(set_alignment_check, super::interrupts::alignment_check);
+        set_idt_handler!(set_machine_check, super::interrupts::machine_check);
+        set_idt_handler!(
+            set_simd_floating_point_exception,
+            super::interrupts::simd_floating_point_exception
         );
-        IDT.set_segment_not_present(
-            super::interrupts::segment_not_present,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(
+            set_virtualization_exception,
+            super::interrupts::virtualization_exception
         );
-        IDT.set_stack_segment_fault(
-            super::interrupts::stack_segment_fault,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(
+            set_control_protection_exception,
+            super::interrupts::control_protection_exception
         );
-        IDT.set_general_protection_fault(
-            super::interrupts::general_protection_fault,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(
+            set_hypervisor_injection_exception,
+            super::interrupts::hypervisor_injection_exception
         );
-        IDT.set_page_fault(
-            super::interrupts::page_fault,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(
+            set_vmm_communication_exception,
+            super::interrupts::vmm_communication_exception
         );
-        IDT.set_x87_floating_point_exception(
-            super::interrupts::x87_floating_point_exception,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
-        );
-        IDT.set_alignment_check(
-            super::interrupts::alignment_check,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
-        );
-        IDT.set_machine_check(
-            super::interrupts::machine_check,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
-        );
-        IDT.set_simd_floating_point_exception(
-            super::interrupts::simd_floating_point_exception,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
-        );
-        IDT.set_virtualization_exception(
-            super::interrupts::virtualization_exception,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
-        );
-        IDT.set_control_protection_exception(
-            super::interrupts::control_protection_exception,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
-        );
-        IDT.set_hypervisor_injection_exception(
-            super::interrupts::hypervisor_injection_exception,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
-        );
-        IDT.set_vmm_communication_exception(
-            super::interrupts::vmm_communication_exception,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
-        );
-        IDT.set_security_exception(
-            super::interrupts::security_exception,
-            cs,
-            None,
-            GateType::Trap,
-            PrivilegeLevel::Ring0,
+        set_idt_handler!(
+            set_security_exception,
+            super::interrupts::security_exception
         );
 
         nd_x86_64::lidt(&IDT.table_ptr());

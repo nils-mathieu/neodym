@@ -61,7 +61,7 @@ impl SerialOut {
 
             // Set baud rate to 38400 baud.
             outb(Self::COM1 + 3, 0x80);
-            outb(Self::COM1 + 0, 0x03);
+            outb(Self::COM1, 0x03);
             outb(Self::COM1 + 1, 0x00);
 
             // Confiture the UART. 8 bits, no parity bit, only one stop bit.
