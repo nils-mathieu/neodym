@@ -1,12 +1,20 @@
 use core::arch::asm;
 
-use crate::VirtAddr;
+use crate::{SegmentSelector, VirtAddr};
 
 /// Halts the CPU until a new interrupt occurs.
 #[inline(always)]
 pub unsafe fn hlt() {
     unsafe {
         asm!("hlt", options(nomem, preserves_flags, nostack));
+    }
+}
+
+/// Raises a breakpoint exception by invoking the **INT3** instruction.
+#[inline(always)]
+pub unsafe fn int3() {
+    unsafe {
+        asm!("int3", options(nomem, nostack));
     }
 }
 
@@ -88,5 +96,13 @@ pub unsafe fn sgdt() -> TablePtr {
         let mut ret = TablePtr { limit: 0, base: 0 };
         asm!("sgdt [{}]", in(reg) &mut ret, options(nostack, preserves_flags));
         ret
+    }
+}
+
+/// Sets the value of the *Task State Register*.
+#[inline(always)]
+pub unsafe fn ltr(sel: SegmentSelector) {
+    unsafe {
+        asm!("ltr {:x}", in(reg) sel.to_raw(), options(nostack, preserves_flags));
     }
 }

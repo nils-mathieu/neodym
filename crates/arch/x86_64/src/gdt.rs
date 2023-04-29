@@ -139,6 +139,9 @@ impl fmt::Debug for IstIndex {
 pub struct SegmentDescriptor<const SIZE: usize>([u64; SIZE]);
 
 impl<const SIZE: usize> SegmentDescriptor<SIZE> {
+    /// The "null" segment descriptor.
+    pub const NULL: Self = Self::from_raw([0x00; SIZE]);
+
     /// Creates a new [`SegmentDescriptor`] from the provided raw array.
     #[inline(always)]
     pub const fn from_raw(array: [u64; SIZE]) -> Self {
@@ -153,9 +156,6 @@ impl<const SIZE: usize> SegmentDescriptor<SIZE> {
 }
 
 impl SegmentDescriptor<1> {
-    /// The "null" segment descriptor.
-    pub const NULL: Self = Self::from_raw([0x00]);
-
     /// Creates a new 64-bit code [`SegmentDescriptor`].
     ///
     /// # Arguments

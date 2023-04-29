@@ -17,6 +17,7 @@
 #![no_main]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![feature(used_with_arg)]
+#![feature(abi_x86_interrupt)]
 
 mod arch;
 mod boot;
@@ -24,7 +25,9 @@ mod boot;
 /// This function is called when something in our code panics. This should be considered a serious
 /// bug in the kernel.
 #[panic_handler]
-fn handle_panic(_info: &core::panic::PanicInfo) -> ! {
+fn handle_panic(info: &core::panic::PanicInfo) -> ! {
+    nd_log::error!("{info}");
+
     // TODO: Log the error properly.
     self::arch::die();
 }

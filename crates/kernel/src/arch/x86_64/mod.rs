@@ -1,6 +1,8 @@
 //! Code specific to the `x86_64` CPU architecture.
 
+mod interrupts;
 mod logger;
+mod tables;
 
 /// Disables interrupts and halts the CPU.
 ///
@@ -27,12 +29,10 @@ pub fn die() -> ! {
 ///
 /// This function must only be called once (e.g. it must not be called from within itself).
 pub unsafe fn entry_point() -> ! {
-    unsafe { self::logger::initialize() };
-
-    nd_log::trace!("hello");
-    nd_log::warn!("hello");
-    nd_log::info!("hello");
-    nd_log::error!("hello");
+    unsafe {
+        self::logger::initialize();
+        self::tables::initialize();
+    }
 
     die();
 }

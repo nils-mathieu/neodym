@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use core::fmt;
 use core::ops::{Index, IndexMut};
 
-use crate::{IstIndex, PrivilegeLevel, SegmentSelector};
+use crate::{IstIndex, PrivilegeLevel, SegmentSelector, TablePtr};
 
 /// The address of an
 /// [Interrupt Service Routine](https://wiki.osdev.org/Interrupt_Service_Routines).
@@ -184,7 +184,25 @@ impl fmt::Debug for GateDescriptor {
 /// The first 32 entries are used to handle CPU exceptions (i.e. page fault, divide by zero, etc).
 #[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
-pub struct Ist([GateDescriptor; 256]);
+pub struct Idt([GateDescriptor; 256]);
+
+impl Idt {
+    /// Creates a new [`Idt`] instance with no descriptors.
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self([GateDescriptor::NULL; 256])
+    }
+
+    /// Returns a [`TablePtr`] referencing this [`Idt`].
+    #[inline(always)]
+    pub fn table_ptr(&self) -> TablePtr {
+        let limit = core::mem::size_of::<Self>() as u16 - 1;
+        TablePtr {
+            limit,
+            base: self as *const Self as usize as u64,
+        }
+    }
+}
 
 /// A specific [CPU Exception](https://wiki.osdev.org/Exceptions).
 ///
@@ -329,7 +347,7 @@ pub enum CpuException {
     SecurityException = 0x1E,
 }
 
-impl Index<CpuException> for Ist {
+impl Index<CpuException> for Idt {
     type Output = GateDescriptor;
 
     #[inline(always)]
@@ -338,14 +356,14 @@ impl Index<CpuException> for Ist {
     }
 }
 
-impl IndexMut<CpuException> for Ist {
+impl IndexMut<CpuException> for Idt {
     #[inline(always)]
     fn index_mut(&mut self, index: CpuException) -> &mut Self::Output {
         &mut self[index as u8]
     }
 }
 
-impl Index<u8> for Ist {
+impl Index<u8> for Idt {
     type Output = GateDescriptor;
 
     #[inline(always)]
@@ -354,7 +372,7 @@ impl Index<u8> for Ist {
     }
 }
 
-impl IndexMut<u8> for Ist {
+impl IndexMut<u8> for Idt {
     #[inline(always)]
     fn index_mut(&mut self, index: u8) -> &mut Self::Output {
         unsafe { self.0.get_unchecked_mut(index as usize) }
@@ -376,6 +394,7 @@ pub enum TableEntryKind {
 ///
 /// <https://wiki.osdev.org/Exceptions#Selector_Error_Code>
 #[derive(Clone, Copy)]
+#[repr(transparent)]
 pub struct TableEntryError(u32);
 
 impl TableEntryError {
@@ -417,6 +436,7 @@ impl fmt::Debug for TableEntryError {
 bitflags! {
     /// An error specified by the CPU on [page fault](CpuException::PageFault).
     #[derive(Debug, Clone, Copy)]
+    #[repr(transparent)]
     pub struct PageFaultError: u32 {
         /// The page fault was caused by a page-protection violation. When clear, it was caused by
         /// a non-present page.
@@ -442,4 +462,15 @@ bitflags! {
         /// The fault is unrelated to ordinary paging.
         const SOFTWARE_GUARD_EXT = 1 << 7;
     }
+}
+
+/// The values that are always pushed onto the stack when an interrupt is called.
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct InterruptStackFrame {
+    ip: u64,
+    cs: u64,
+    flags: u64,
+    sp: u64,
+    ss: u64,
 }

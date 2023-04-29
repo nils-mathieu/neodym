@@ -7,14 +7,17 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(missing_docs)]
 #![warn(missing_debug_implementations)]
+#![feature(abi_x86_interrupt)]
 
 mod gdt;
 mod idt;
 mod instructions;
+mod registers;
 
 pub use self::gdt::*;
 pub use self::idt::*;
 pub use self::instructions::*;
+pub use self::registers::*;
 
 /// A virtual address.
 pub type VirtAddr = u64;
