@@ -16,6 +16,12 @@ pub use self::gdt::*;
 pub use self::idt::*;
 pub use self::instructions::*;
 
+/// A virtual address.
+pub type VirtAddr = u64;
+
+/// A physical address.
+pub type PhysAddr = u64;
+
 /// A privilege level (i.e. ring level).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[allow(missing_docs)]
