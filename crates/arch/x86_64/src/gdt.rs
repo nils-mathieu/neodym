@@ -281,6 +281,20 @@ pub struct Tss {
 }
 
 impl Tss {
+    /// Creates a new empty [`Tss`].
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self {
+            _reserved0: 0,
+            rsp: [UnalignedVirtAddr::NULL; 3],
+            _reserved1: [0; 2],
+            ist: [UnalignedVirtAddr::NULL; 7],
+            _reserved2: [0; 2],
+            _reserved3: 0,
+            iopb: 0,
+        }
+    }
+
     /// Sets a **Stack Pointer** within the *Interrupt Stack Table*.
     #[inline(always)]
     pub fn set_interrupt_stack(&mut self, index: IstIndex, addr: VirtAddr) {
@@ -291,6 +305,11 @@ impl Tss {
 #[repr(C, packed(4))]
 #[derive(Clone, Copy)]
 struct UnalignedVirtAddr(VirtAddr);
+
+impl UnalignedVirtAddr {
+    /// The null pointer.
+    pub const NULL: Self = Self(0);
+}
 
 impl fmt::Debug for UnalignedVirtAddr {
     #[inline]

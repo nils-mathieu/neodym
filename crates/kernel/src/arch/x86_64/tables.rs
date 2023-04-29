@@ -1,6 +1,6 @@
 use nd_x86_64::{
-    CpuException, DescriptorTable, GateDescriptor, GateType, Idt, PrivilegeLevel,
-    SegmentDescriptor, SegmentSelector, TablePtr, VirtAddr,
+    CpuException, DescriptorTable, GateDescriptor, GateType, Idt, IstIndex, PrivilegeLevel,
+    SegmentDescriptor, SegmentSelector, TablePtr, Tss, VirtAddr,
 };
 
 /// The global descriptor table that we are going to load. We can't use a simple array because some
@@ -34,6 +34,12 @@ impl Gdt {
     }
 }
 
+/// The stack that will be used when a double fault occurs.
+static mut DOUBLE_FAULT_STACK: [u8; 4096 * 4] = [0u8; 4096 * 4];
+
+/// The task state segment.
+static mut TSS: Tss = Tss::new();
+
 /// The *Global Descriptor Table* that we're going to use.
 static mut GDT: Gdt = Gdt::NULL;
 
@@ -48,10 +54,20 @@ static mut IDT: Idt = Idt::new();
 pub unsafe fn initialize() {
     unsafe {
         // Initialize the GDT.
+        TSS.set_interrupt_stack(
+            IstIndex::One,
+            DOUBLE_FAULT_STACK.as_ptr().add(DOUBLE_FAULT_STACK.len()) as usize as u64,
+        );
+
         GDT.kernel_code = SegmentDescriptor::code(true, PrivilegeLevel::Ring0, false, true);
         GDT.kernel_data = SegmentDescriptor::data(true, PrivilegeLevel::Ring0, false, true);
         GDT.user_code = SegmentDescriptor::code(true, PrivilegeLevel::Ring3, false, true);
         GDT.user_data = SegmentDescriptor::data(true, PrivilegeLevel::Ring3, false, true);
+        GDT.tss = SegmentDescriptor::tss(
+            true,
+            PrivilegeLevel::Ring0,
+            &TSS as *const Tss as usize as u64,
+        );
 
         let cs = SegmentSelector::new(1, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
         let ss = SegmentSelector::new(0, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
@@ -59,13 +75,25 @@ pub unsafe fn initialize() {
         nd_x86_64::lgdt(&GDT.table_ptr());
         nd_x86_64::set_cs(cs);
         nd_x86_64::set_ss(ss);
+        nd_x86_64::ltr(SegmentSelector::new(
+            5,
+            DescriptorTable::Gdt,
+            PrivilegeLevel::Ring0,
+        ));
 
         let trap = |addr: VirtAddr| {
             GateDescriptor::new(addr, cs, None, GateType::Trap, PrivilegeLevel::Ring0, true)
         };
 
         // Initialize the IDT.
-        IDT[CpuException::DoubleFault] = trap(super::interrupts::double_fault as usize as u64);
+        IDT[CpuException::DoubleFault] = GateDescriptor::new(
+            super::interrupts::double_fault as usize as u64,
+            cs,
+            Some(IstIndex::One),
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+            true,
+        );
         IDT[CpuException::InvalidOpCode] = trap(super::interrupts::invalid_op_code as usize as u64);
         IDT[CpuException::DeviceNotAvailable] =
             trap(super::interrupts::device_not_available as usize as u64);
