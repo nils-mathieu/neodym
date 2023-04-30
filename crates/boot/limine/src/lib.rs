@@ -270,13 +270,13 @@ macro_rules! limine_reqs {
             #[used(linker)]
             static mut LIMINE_REQS: [*const (); 1 + $crate::limine_reqs!(@ count => $($place,)*)]
                 = [
-                    $( ::core::ptr::addr_of!($place) as *const (), )*
+                    $( unsafe { ::core::ptr::addr_of!($place) } as *const (), )*
                     ::core::ptr::null(),
                 ];
         };
     };
     ( @ count => $( $place:expr, )* ) => {
-        [ $( $crate::limine_reqs!( @ replace => $place, ()) )* ].len()
+        [ $( $crate::limine_reqs!( @ replace => $place, ()) ),* ].len()
     };
     ( @ replace => $place:expr, $($by:tt)* ) => {
         $($by)*

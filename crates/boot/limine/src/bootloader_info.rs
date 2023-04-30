@@ -1,5 +1,7 @@
 use core::fmt;
 
+use crate::Feature;
+
 /// Requests some information about the bootloader responding to Limine requests.
 #[derive(Debug)]
 #[repr(transparent)]
@@ -10,6 +12,9 @@ pub struct BootloaderInfoResponse {
     name: *const i8,
     version: *const i8,
 }
+
+unsafe impl Send for BootloaderInfoResponse {}
+unsafe impl Sync for BootloaderInfoResponse {}
 
 impl BootloaderInfoResponse {
     /// Returns the name of the bootloader.
@@ -32,6 +37,13 @@ impl fmt::Debug for BootloaderInfoResponse {
             .field("version", &self.version())
             .finish()
     }
+}
+
+impl Feature for BootloaderInfoRequest {
+    const MAGIC: [u64; 2] = [0xf55038d8e2a1202f, 0x279426fcf5f59740];
+    const REVISION: u64 = 0;
+    const EXPECTED_REVISION: u64 = 0;
+    type Response = BootloaderInfoResponse;
 }
 
 /// Converts a C-like string into a regular Rust string.

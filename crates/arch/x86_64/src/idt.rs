@@ -183,6 +183,7 @@ macro_rules! exception_setters {
     ) => {
         $(
             #[doc = concat!("Sets the *Interrupt Service Routine* to be called when the [`", stringify!($index), "`] exception occurs.")]
+            #[inline(always)]
             pub fn $fn_name(&mut self, handler: extern "x86-interrupt" fn($( $args ),* ) $( -> $ret )?, cs: SegmentSelector, ist: Option<IstIndex>, ty: GateType, dpl: PrivilegeLevel) {
                 self[$index] = GateDescriptor::new(
                     handler as usize as u64,

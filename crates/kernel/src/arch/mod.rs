@@ -9,4 +9,4 @@
 
 mod x86_64;
 
-pub use self::x86_64::{die, entry_point};
+pub use self::x86_64::{die, initialize};
