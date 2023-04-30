@@ -14,11 +14,16 @@
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
 
+mod bootloader_info;
 mod entry_point;
+mod smp;
 
+pub use self::bootloader_info::*;
 pub use self::entry_point::*;
+pub use self::smp::*;
 
-use core::{fmt, mem::MaybeUninit};
+use core::fmt;
+use core::mem::MaybeUninit;
 
 /// A pointer which the Limine bootloader will write to.
 ///
