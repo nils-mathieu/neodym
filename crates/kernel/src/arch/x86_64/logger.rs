@@ -12,6 +12,11 @@ use core::fmt::Write as _;
 ///
 /// The serial I/O ports must not be used anywere else in the program (and must never be).
 pub unsafe fn initialize() {
+    // SAFETY:
+    //  The `initialize` function must only be called once, ensuring that the serial port has not
+    //  been initialized yet.
+    //
+    //  This file is the only place of the code that uses the serial port, ensuring exclusivity.
     unsafe { SerialOut::init() };
 
     nd_log::set_global_logger(|record| {
@@ -23,7 +28,8 @@ pub unsafe fn initialize() {
         };
 
         // SAFETY:
-        //  We're setting the global logger *after* having initialized the serial output port.
+        //  We're setting the global logger *after* having initialized the serial output port,
+        //  ensuring that the `get_unchecked` function is safe.
         let mut serial_out = unsafe { SerialOut::get_unchecked() };
 
         let _ = writeln!(serial_out, "{prefix}{}", record.message);
@@ -55,6 +61,9 @@ impl SerialOut {
     ///
     /// The serial I/O ports must not be used anywere else in the program (and must never be).
     pub unsafe fn init() -> Self {
+        // More or less taken from:
+        //   https://wiki.osdev.org/Serial_Ports
+
         unsafe {
             // Disable interrupts.
             outb(Self::COM1 + 1, 0x00);
@@ -64,7 +73,8 @@ impl SerialOut {
             outb(Self::COM1, 0x03);
             outb(Self::COM1 + 1, 0x00);
 
-            // Confiture the UART. 8 bits, no parity bit, only one stop bit.
+            // Confiture the UART. 8 bits, no parity bit, only one stop bit. This also includes
+            // more configuration.
             outb(Self::COM1 + 3, 0x03);
             outb(Self::COM1 + 2, 0xC7);
             outb(Self::COM1 + 4, 0x1E);

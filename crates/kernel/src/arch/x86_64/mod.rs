@@ -17,13 +17,16 @@ pub fn die() -> ! {
     }
 }
 
-/// Initializes the CPU and puts it into the
+/// Initializes the CPU.
 ///
-/// It should normally be called at the end of bootloader-specific entry points.
+/// It should normally be called at the begining of bootloader-specific entry points in order to
+/// put the machine in an stable state, suitable for actually initializing the kernel interface.
 ///
 /// # Steps
 ///
-/// This function will initialize the logging facade, setup a **GDT** and an **IDT**.
+/// 1. Initialize a simple logging facade using the serial port.
+/// 2. Setup the *Global Descriptor Table*.
+/// 3. Setup the *Interrupt Descriptor Table*.
 ///
 /// # Expected Machine State
 ///

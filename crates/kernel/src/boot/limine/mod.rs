@@ -1,8 +1,8 @@
 //! The entry point of the kernel, when booted by the
 //! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md) bootloader.
 
-use nd_limine::{limine_reqs, BootloaderInfoRequest};
-use nd_limine::{EntryPointRequest, Request};
+use nd_limine::limine_reqs;
+use nd_limine::{BootloaderInfoRequest, EntryPointRequest, Request};
 
 /// Requests the bootloader to provide information about itself, such as its name and version.
 /// Those information will be logged at startup.
