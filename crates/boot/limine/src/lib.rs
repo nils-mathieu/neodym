@@ -16,10 +16,12 @@
 
 mod bootloader_info;
 mod entry_point;
+mod module;
 mod smp;
 
 pub use self::bootloader_info::*;
 pub use self::entry_point::*;
+pub use self::module::*;
 pub use self::smp::*;
 
 use core::fmt;

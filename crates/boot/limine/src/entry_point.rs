@@ -9,13 +9,13 @@ pub type EntryPointFn = extern "C" fn() -> !;
 /// By default, if this requeste is not specified, Limine calls the entry point specified in the
 /// ELF header of the kernel image.
 #[derive(Debug)]
-pub struct EntryPointRequest(pub EntryPointFn);
+pub struct EntryPoint(pub EntryPointFn);
 
-/// The response to the [`EntryPointRequest`].
+/// The response to the [`EntryPoint`] request.
 #[derive(Debug)]
 pub struct EntryPointResponse;
 
-impl Feature for EntryPointRequest {
+impl Feature for EntryPoint {
     const MAGIC: [u64; 2] = [0x13d86c035a1cd3e1, 0x2b0caa89d8f3026a];
     const REVISION: u64 = 0;
     const EXPECTED_REVISION: u64 = 0;

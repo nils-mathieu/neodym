@@ -34,12 +34,12 @@ bitflags! {
 /// This will not be done if the request is not present.
 #[repr(C)]
 #[derive(Debug)]
-pub struct SmpRequest {
+pub struct Smp {
     /// Some flags passed to the bootloader.
     pub flags: SmpRequestFlags,
 }
 
-/// The response to the [`SmpRequest`].
+/// The response to the [`Smp`] request.
 #[repr(C)]
 #[cfg(target_arch = "x86_64")]
 pub struct SmpResponse {
@@ -83,7 +83,7 @@ impl fmt::Debug for SmpResponse {
     }
 }
 
-impl Feature for SmpRequest {
+impl Feature for Smp {
     const MAGIC: [u64; 2] = [0x95a67b819a1b857e, 0xa0b61b723b6a73e0];
     const REVISION: u64 = 0;
     const EXPECTED_REVISION: u64 = 0;

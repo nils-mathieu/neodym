@@ -5,9 +5,9 @@ use crate::Feature;
 /// Requests some information about the bootloader responding to Limine requests.
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct BootloaderInfoRequest;
+pub struct BootloaderInfo;
 
-/// The response to the [`BooloaderInfoRequest`].
+/// The response to the [`BootloaderInfo`] request.
 pub struct BootloaderInfoResponse {
     name: *const i8,
     version: *const i8,
@@ -39,7 +39,7 @@ impl fmt::Debug for BootloaderInfoResponse {
     }
 }
 
-impl Feature for BootloaderInfoRequest {
+impl Feature for BootloaderInfo {
     const MAGIC: [u64; 2] = [0xf55038d8e2a1202f, 0x279426fcf5f59740];
     const REVISION: u64 = 0;
     const EXPECTED_REVISION: u64 = 0;
