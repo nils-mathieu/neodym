@@ -34,6 +34,8 @@ pub unsafe fn initialize() {
 
         let _ = writeln!(serial_out, "{prefix}{}", record.message);
     });
+
+    nd_log::trace!("Logger initialized.");
 }
 
 /// Represents the output serial port.

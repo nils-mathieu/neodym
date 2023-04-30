@@ -4,6 +4,8 @@ use core::ffi::CStr;
 use core::fmt;
 use core::mem::MaybeUninit;
 
+use crate::Feature;
+
 bitflags! {
     /// Some flags which are configure an [`InternalModule`].
     #[derive(Debug, Clone, Copy)]
@@ -81,6 +83,9 @@ pub struct Module {
     internal_modules: *const *const InternalModule,
 }
 
+unsafe impl Send for Module {}
+unsafe impl Sync for Module {}
+
 impl Module {
     /// Creates a new [`Module`] instance.
     #[inline(always)]
@@ -120,6 +125,9 @@ pub struct ModuleResponse {
     module_count: u64,
     modules: *mut *mut FileResponse,
 }
+
+unsafe impl Send for ModuleResponse {}
+unsafe impl Sync for ModuleResponse {}
 
 impl ModuleResponse {
     /// Returns a shared slice over the files that were loaded as kernel modules.
@@ -270,6 +278,9 @@ pub struct File {
     part_uuid: Uuid,
 }
 
+unsafe impl Send for File {}
+unsafe impl Sync for File {}
+
 impl File {
     /// Returns the address backing this file.
     #[inline(always)]
@@ -323,4 +334,11 @@ impl fmt::Debug for File {
             .field("cmdline", &self.cmdline())
             .finish_non_exhaustive()
     }
+}
+
+impl Feature for Module {
+    const MAGIC: [u64; 2] = [0x3e7e279702be32af, 0xca1c4f3bd1280cee];
+    const REVISION: u64 = 1;
+    const EXPECTED_REVISION: u64 = 1;
+    type Response = ModuleResponse;
 }

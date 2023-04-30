@@ -54,6 +54,7 @@ static mut IDT: Idt = Idt::new();
 pub unsafe fn initialize() {
     unsafe {
         // Initialize the GDT.
+        nd_log::trace!("Setting up the GDT...");
         TSS.set_interrupt_stack(
             IstIndex::One,
             DOUBLE_FAULT_STACK.as_ptr().add(DOUBLE_FAULT_STACK.len()) as usize as u64,
@@ -82,6 +83,7 @@ pub unsafe fn initialize() {
         ));
 
         // Initialize the IDT.
+        nd_log::trace!("Setting up the IDT...");
         macro_rules! set_idt_handler {
             ($f:ident, $handler:expr) => {
                 IDT.$f($handler, cs, None, GateType::Trap, PrivilegeLevel::Ring0);
