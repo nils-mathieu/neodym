@@ -9,14 +9,19 @@
 #![warn(missing_debug_implementations)]
 #![feature(abi_x86_interrupt)]
 
+#[cfg(not(target_arch = "x86_64"))]
+compile_error!("The `x86_64` crate can only be used on x86_64 machines.");
+
 mod gdt;
 mod idt;
 mod instructions;
+mod paging;
 mod registers;
 
 pub use self::gdt::*;
 pub use self::idt::*;
 pub use self::instructions::*;
+pub use self::paging::*;
 pub use self::registers::*;
 
 /// A virtual address.

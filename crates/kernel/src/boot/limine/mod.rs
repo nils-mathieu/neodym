@@ -144,7 +144,7 @@ extern "C" fn entry_point() -> ! {
     // Note that the actual signature of the entry point is `extern "C" fn() -> !`, but in case
     // the function ends up returning, we don't want to trigger UB.
     // Instead, we'll just log an error and die.
-    nd_init();
+    nd_init(); // doesn't work because we're not fixing the addresses.
 
     nd_log::error!("The `nd_init` program has returned.");
     crate::arch::die();

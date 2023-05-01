@@ -2,6 +2,7 @@
 
 mod interrupts;
 mod logger;
+mod paging;
 mod tables;
 
 /// Disables interrupts and halts the CPU.

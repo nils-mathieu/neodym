@@ -24,7 +24,11 @@ pub extern "x86-interrupt" fn general_protection_fault(
     _: InterruptStackFrame,
     err: TableEntryError,
 ) {
-    panic!("General Protection Fault (err = {err:?})");
+    if err.to_raw() == 0 {
+        panic!("General Protection Fault (err = None)");
+    } else {
+        panic!("General Protection Fault (err = {err:?})");
+    }
 }
 
 pub extern "x86-interrupt" fn page_fault(_: InterruptStackFrame, err: PageFaultError) {

@@ -471,6 +471,12 @@ pub enum TableEntryKind {
 pub struct TableEntryError(u32);
 
 impl TableEntryError {
+    /// Returns the raw error code.
+    #[inline(always)]
+    pub const fn to_raw(self) -> u32 {
+        self.0
+    }
+
     /// Returns the index of the segment that produced the error.
     #[inline(always)]
     pub const fn index(self) -> u16 {
