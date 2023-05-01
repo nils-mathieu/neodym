@@ -219,6 +219,7 @@ impl FileResponse {
     /// the correct revision number.
     #[inline]
     pub fn file(&self) -> Option<&File> {
+        #[allow(clippy::absurd_extreme_comparisons)]
         if self.revision >= Self::EXPECTED_REVISION {
             Some(unsafe { self.file_unchecked() })
         } else {
@@ -230,6 +231,7 @@ impl FileResponse {
     /// the correct revision number.
     #[inline]
     pub fn file_mut(&mut self) -> Option<&mut File> {
+        #[allow(clippy::absurd_extreme_comparisons)]
         if self.revision >= Self::EXPECTED_REVISION {
             Some(unsafe { self.file_unchecked_mut() })
         } else {
@@ -240,6 +242,7 @@ impl FileResponse {
 
 impl Drop for FileResponse {
     fn drop(&mut self) {
+        #[allow(clippy::absurd_extreme_comparisons)]
         if self.revision >= Self::EXPECTED_REVISION {
             unsafe { self.file.assume_init_drop() };
         }

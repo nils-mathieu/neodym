@@ -1,11 +1,11 @@
 [workspace]
 members = [
-  "crates/kernel",
-  "crates/init",
-  "crates/boot/limine",
-  "crates/arch/x86_64",
-  "crates/lib/neodym-sys",
-  "crates/utility/log",
+    "crates/kernel",
+    "crates/nd_init",
+    "crates/boot/limine",
+    "crates/arch/x86_64",
+    "crates/lib/neodym-sys",
+    "crates/utility/log",
 ]
 resolver = "2"
 
