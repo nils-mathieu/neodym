@@ -4,18 +4,15 @@
 #![cfg_attr(feature = "try_trait_v2", feature(try_trait_v2))]
 
 use core::fmt;
-use core::num::NonZeroUsize;
 #[cfg(feature = "try_trait_v2")]
 use core::ops::{ControlFlow, FromResidual, Try};
 
 #[cfg(target_arch = "x86_64")]
 pub mod x86_64;
 
-/// A handle to a process.
-pub type ProcessHandle = NonZeroUsize;
-
 /// The return value of a system call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[must_use = "this `SysResult` may be an error, which should be handled"]
 pub struct SysResult(pub usize);
 
 impl SysResult {

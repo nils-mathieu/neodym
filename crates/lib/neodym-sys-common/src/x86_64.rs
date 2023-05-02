@@ -6,15 +6,12 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(usize)]
 pub enum SystemCall {
-    /// The `terminate` system call.
-    Terminate,
-    /// The `yield` system call.
-    Yield,
+    TerminateSelf,
 }
 
 impl SystemCall {
-    /// The maximum system call number.
-    pub const MAX_SYSCALL_NUMBER: usize = 1;
+    /// The number of defined system calls.
+    pub const COUNT: usize = 1;
 
     /// Creates a new [`SystemCall`] from a system call number.
     ///
@@ -29,9 +26,10 @@ impl SystemCall {
     /// Creates a new [`SystemCall`] from a system call number.
     #[inline(always)]
     pub const fn from_usize(n: usize) -> Option<Self> {
-        match n {
-            0..=Self::MAX_SYSCALL_NUMBER => Some(unsafe { Self::from_usize_unchecked(n) }),
-            _ => None,
+        if n < Self::COUNT {
+            Some(unsafe { Self::from_usize_unchecked(n) })
+        } else {
+            None
         }
     }
 

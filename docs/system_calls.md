@@ -11,5 +11,18 @@ passed in the `rax` register, and the arguments are passed to `rdi`, `rsi` and `
 
 The return value is stored in `rax`.
 
-| Mnemonic | `rax` |
-| -------- | ----- |
+| Mnemonic                        | `rax` |
+| ------------------------------- | ----- |
+| [TerminateSelf](#TerminateSelf) | 0     |
+
+### TerminateSelf
+
+`rax = 0`
+
+```rust
+fn terminate_self() -> !;
+```
+
+The `TerminateSelf` system call terminates the current process.
+
+This system call never actually returns to the caller, as the process is terminated.

@@ -3,7 +3,7 @@
 use core::arch::asm;
 
 use neodym_sys_common::x86_64::SystemCall;
-use neodym_sys_common::{ProcessHandle, SysResult};
+use neodym_sys_common::SysResult;
 
 /// Performs a system call with no arguments.
 ///
@@ -99,60 +99,13 @@ pub unsafe fn syscall3(n: SystemCall, arg0: usize, arg1: usize, arg2: usize) -> 
     SysResult(ret)
 }
 
-/// Terminates a specific process.
-///
-/// This function removes the process from the scheduler's queue, and frees all the resources
-/// associated with it.
-///
-/// This corresponds to the [`SystemCall::Terminate`] system call.
-#[inline(always)]
-pub fn terminate(process: ProcessHandle) {
-    unsafe { syscall1(SystemCall::Terminate, process.get()) };
-}
-
 /// Terminates the current process.
 ///
-/// This function removes the current process from the scheduler's queue, and frees all the
-/// resources associated with it.
-///
-/// This corresponds to the [`SystemCall::Terminate`] system call.
+/// This corresponds to the [`SystemCall::TerminateSelf`] system call.
 pub fn terminate_self() -> ! {
     unsafe {
-        // We're not using the `syscall1` function here because we want to use the `noreturn`
-        // option.
-
-        core::arch::asm!(
-            "syscall",
-            in("rax") SystemCall::Terminate.to_usize(),
-            in("rdi") 0,
-            options(noreturn, nostack, preserves_flags)
-        );
+        // This system call is infallible won't even return.
+        let _ = syscall0(SystemCall::TerminateSelf);
+        core::hint::unreachable_unchecked();
     }
-}
-
-/// Yields the control of the CPU to another, specific, process.
-///
-/// The amount of CPU time yielded to the process is the remainder of the current time slice of
-/// the current process.
-///
-/// This corresponds to the [`SystemCall::Yield`] system call.
-#[inline(always)]
-pub fn yield_to(process: ProcessHandle) -> SysResult {
-    #[cfg(target_arch = "x86_64")]
-    unsafe {
-        syscall1(SystemCall::Yield, process.get())
-    }
-}
-
-/// Yields the control of the CPU to any other process.
-///
-/// The scheduler will chose the process to yield CPU time to.
-///
-/// The amount of CPU time yielded to the process is the remainder of the current time slice of
-/// the current process.
-///
-/// This corresponds to the [`SystemCall::Yield`] system call.
-#[inline(always)]
-pub fn yield_to_any() -> SysResult {
-    unsafe { syscall1(SystemCall::Yield, 0) }
 }
