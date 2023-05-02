@@ -12,7 +12,7 @@ use core::panic::PanicInfo;
 fn handle_panic(_info: &PanicInfo) -> ! {
     // TODO:
     //  Exit the process properly.
-    loop {}
+    neodym_sys::sched::terminate_self();
 }
 
 /// The entry point of the program.
@@ -21,5 +21,14 @@ fn handle_panic(_info: &PanicInfo) -> ! {
 #[link_section = ".entry_point"]
 #[no_mangle]
 extern "C" fn entry_point() -> ! {
-    todo!();
+    main();
+    neodym_sys::sched::terminate_self();
+}
+
+/// The main function of the program.
+///
+/// This function is called by the raw [`entry_point`] upon startup of the program
+/// and is responsible for initializing the user's environment.
+fn main() {
+    // Initialize a simple text-mode environment.
 }

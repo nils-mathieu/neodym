@@ -9,3 +9,14 @@
 //! At the moment, only the `x86_64` architecture is supported.
 
 #![no_std]
+
+use core::num::NonZeroUsize;
+
+pub mod raw;
+pub mod sched;
+
+/// A handle to a process.
+///
+/// Processes are identified by a unique handle by the kernel. This handle is used to interact with
+/// the process, for example to initate inter-process communication or to terminate the process.
+pub type ProcessHandle = NonZeroUsize;

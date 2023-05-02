@@ -18,6 +18,7 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![feature(used_with_arg)]
 #![feature(abi_x86_interrupt)]
+#![feature(panic_info_message)]
 
 mod arch;
 mod boot;
@@ -27,7 +28,21 @@ mod init;
 /// bug in the kernel.
 #[panic_handler]
 fn handle_panic(info: &core::panic::PanicInfo) -> ! {
-    nd_log::error!("{info}");
+    nd_log::error!("KERNEL PANIC!");
+    nd_log::error!("");
+    nd_log::error!("  This is a serious bug in the kernel.");
+    nd_log::error!("  Please report this issue at");
+    nd_log::error!("");
+    nd_log::error!("      https://github.com/nils-mathieu/neodym/issues/new");
+    nd_log::error!("");
+
+    if let Some(message) = info.message() {
+        nd_log::error!("> Message: {}", message);
+    }
+
+    if let Some(location) = info.location() {
+        nd_log::error!(">      At: {}:{}", location.file(), location.line());
+    }
 
     // TODO: Log the error properly.
     self::arch::die();
