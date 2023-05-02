@@ -298,7 +298,29 @@ impl Tss {
     /// Sets a **Stack Pointer** within the *Interrupt Stack Table*.
     #[inline(always)]
     pub fn set_interrupt_stack(&mut self, index: IstIndex, addr: VirtAddr) {
-        unsafe { self.ist.get_unchecked_mut(index as usize - 1).0 = addr };
+        unsafe {
+            self.ist.get_unchecked_mut(index as usize - 1).0 = addr;
+        }
+    }
+
+    /// Sets the stack pointer that will be loaded when going from a higher privilege level to
+    /// a lower one (`to_privilege`).
+    ///
+    /// # Safety
+    ///
+    /// `to_privilege` must not be [`PrivilegeLevel::Ring3`].
+    ///
+    /// # Panics
+    ///
+    /// In debug modes, this function panics if the provided `to_privilege` is
+    /// `PrivilegeLevel::Ring3`.
+    #[inline(always)]
+    pub unsafe fn set_stack_pointer(&mut self, to_privilege: PrivilegeLevel, addr: VirtAddr) {
+        debug_assert!(to_privilege != PrivilegeLevel::Ring3);
+
+        unsafe {
+            self.rsp.get_unchecked_mut(to_privilege as usize).0 = addr;
+        }
     }
 }
 

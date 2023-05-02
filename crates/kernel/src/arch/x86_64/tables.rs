@@ -34,8 +34,13 @@ impl Gdt {
     }
 }
 
-/// The stack that will be used when a double fault occurs.
+/// The stack that will be used when a double fault occurs. This is required because a double
+/// fault might occur because of a stack overflow, and in that case, the kernel stack would be
+/// unusable.
 static mut DOUBLE_FAULT_STACK: [u8; 4096 * 4] = [0u8; 4096 * 4];
+
+/// The stack to jump to when going from userspace to kernelspace.
+static mut KERNEL_STACK: [u8; 4096 * 4] = [0u8; 4096 * 4];
 
 /// The task state segment.
 static mut TSS: Tss = Tss::new();
@@ -58,6 +63,10 @@ pub unsafe fn initialize() {
         TSS.set_interrupt_stack(
             IstIndex::One,
             DOUBLE_FAULT_STACK.as_ptr().add(DOUBLE_FAULT_STACK.len()) as usize as u64,
+        );
+        TSS.set_stack_pointer(
+            PrivilegeLevel::Ring0,
+            KERNEL_STACK.as_ptr().add(KERNEL_STACK.len()) as usize as u64,
         );
 
         GDT.kernel_code = SegmentDescriptor::code(true, PrivilegeLevel::Ring0, false, true);
