@@ -37,9 +37,7 @@ actually return control to the kernel, and should instead spawn whatever process
 start the system.
 
 Because the kernel does not include the concept of filesystem (and that's by design!), it cannot
-really find this **nd_init** process by itself. Instead, it relies on the bootloader to load the
-**nd_init** process for it. The specifics of how this is done depends on the bootloader and the
-protocol it uses to load the kernel.
+really find a **nd_init** file by itself. Instead, it relies on the bootloader to load **nd_init**.
 
 **nd_init** is a flat binary (i.e. not an ELF binary). The specifics of how it is loaded by the
 kernel are not yet defined.
@@ -49,3 +47,9 @@ A flat binary can be created from a regular ELF binary using the `objcopy` utili
 ```bash
 objcopy --output-target=binary nd_init.elf nd_init
 ```
+
+Depending on how the kernel will be used (i.e. as a command-line server, or as a graphical desktop),
+**nd_init** will have different responsibilities. For example, if the kernel is used as a graphical
+desktop, **nd_init** will start the window manager and the desktop environment.
+
+**nd_init** is always trusted by the kernel. It has all possible privileges.
