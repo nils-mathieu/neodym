@@ -112,7 +112,7 @@ extern "C" fn entry_point() -> ! {
         }
     };
 
-    let entry_point = match crate::init::parse_entry_point(nd_init_ty, nd_init.data()) {
+    let entry_point = match crate::init::find_entry_point(nd_init_ty, nd_init.data()) {
         Ok(offset) => offset,
         Err(err) => {
             use crate::init::EntryPointError;
@@ -121,7 +121,7 @@ extern "C" fn entry_point() -> ! {
                 EntryPointError::InvalidElfHeader => {
                     nd_log::error!("The ELF header of `nd_init` is invalid.");
                 }
-                EntryPointError::UnsupportElfFormat => {
+                EntryPointError::UnsupportedElfFormat => {
                     nd_log::error!("The format of the ELF file `nd_init` is not supported.");
                     nd_log::error!("Verify that the file is a 64-bit executable ELF file.");
                 }
