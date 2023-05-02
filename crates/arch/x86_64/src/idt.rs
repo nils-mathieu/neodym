@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use core::fmt;
 use core::ops::{Index, IndexMut};
 
-use crate::{IstIndex, PrivilegeLevel, SegmentSelector, TablePtr};
+use crate::{IstIndex, PrivilegeLevel, SegmentSelector, TablePtr, VirtAddr};
 
 /// The address of an
 /// [Interrupt Service Routine](https://wiki.osdev.org/Interrupt_Service_Routines).
@@ -552,4 +552,12 @@ pub struct InterruptStackFrame {
     flags: u64,
     sp: u64,
     ss: u64,
+}
+
+impl InterruptStackFrame {
+    /// Returns the saved instruction pointer.
+    #[inline(always)]
+    pub fn instruction_pointer(&self) -> VirtAddr {
+        self.ip
+    }
 }

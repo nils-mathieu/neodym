@@ -18,6 +18,7 @@ fn handle_panic(_info: &PanicInfo) -> ! {
 /// The entry point of the program.
 ///
 /// This function called by the kernel once it has properly initialized itself.
+#[link_section = ".entry_point"]
 #[no_mangle]
 extern "C" fn entry_point() -> ! {
     todo!();

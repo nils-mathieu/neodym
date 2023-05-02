@@ -4,8 +4,8 @@ pub extern "x86-interrupt" fn double_fault(_: InterruptStackFrame, _: u64) -> ! 
     panic!("Double Fault");
 }
 
-pub extern "x86-interrupt" fn invalid_op_code(_: InterruptStackFrame) {
-    panic!("Invalid Op Code");
+pub extern "x86-interrupt" fn invalid_op_code(frame: InterruptStackFrame) {
+    panic!("Invalid Op Code (addr = {:#x}", frame.instruction_pointer());
 }
 
 pub extern "x86-interrupt" fn device_not_available(_: InterruptStackFrame) {
@@ -32,7 +32,8 @@ pub extern "x86-interrupt" fn general_protection_fault(
 }
 
 pub extern "x86-interrupt" fn page_fault(_: InterruptStackFrame, err: PageFaultError) {
-    panic!("Page Fault (err = {err:?})");
+    let addr = nd_x86_64::cr2();
+    panic!("Page Fault (err = {err:?}, addr = {addr:#x})");
 }
 
 pub extern "x86-interrupt" fn division_error(_: InterruptStackFrame) {
