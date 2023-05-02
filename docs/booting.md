@@ -15,8 +15,8 @@ There is two main reasons for this:
 ### Limine
 
 The [Limine](https://github.com/limine-bootloader/limine/tree/trunk) bootloader loads the kernel in
-64-bit long mode, with paging already enabled. The kernel simply has to setup the **GDT** and the
-**IDT**, before loading the **nd_init** process.
+64-bit long mode, with paging already enabled. The kernel simply has to initialize the CPU for
+(i.e. setting up a **GDT** and an **IDT** on x86_64), before loading the **nd_init** process.
 
 The **nd_init** process is expected to be loaded as a kernel module named "nd_init".
 
