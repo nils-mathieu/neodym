@@ -56,7 +56,7 @@ static mut IDT: Idt = Idt::new();
 /// # Safety
 ///
 /// This function must only be called once.
-pub unsafe fn initialize() {
+pub unsafe fn initialize_tables() {
     unsafe {
         // Initialize the GDT.
         nd_log::trace!("Setting up the GDT...");

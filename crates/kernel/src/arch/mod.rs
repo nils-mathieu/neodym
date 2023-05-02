@@ -7,6 +7,8 @@
 //! 2. Providing wrappers for common functionalities required in other (architecture-independent)
 //!    parts of the system.
 
-mod x86_64;
+#[cfg(target_arch = "x86_64")]
+pub mod x86_64;
 
-pub use self::x86_64::{die, initialize};
+#[cfg(target_arch = "x86_64")]
+pub use self::x86_64::die;

@@ -16,11 +16,13 @@
 
 mod bootloader_info;
 mod entry_point;
+mod memory_map;
 mod module;
 mod smp;
 
 pub use self::bootloader_info::*;
 pub use self::entry_point::*;
+pub use self::memory_map::*;
 pub use self::module::*;
 pub use self::smp::*;
 

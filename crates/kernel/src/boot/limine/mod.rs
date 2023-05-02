@@ -2,7 +2,12 @@
 //! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md) bootloader.
 
 use nd_limine::limine_reqs;
-use nd_limine::{BootloaderInfo, EntryPoint, File, Module, Request, Smp, SmpRequestFlags};
+use nd_limine::{
+    BootloaderInfo, EntryPoint, File, MemMapEntryType, MemoryMap, Module, Request, Smp,
+    SmpRequestFlags,
+};
+
+use crate::arch::x86_64::MemorySegment;
 
 /// Requests the bootloader to provide information about itself, such as its name and version.
 /// Those information will be logged at startup.
@@ -23,7 +28,10 @@ static SMP: Request<Smp> = Request::new(Smp {
     flags: SmpRequestFlags::X2APIC,
 });
 
-limine_reqs!(SMP, BOOTLOADER_INFO, MODULE, ENTRY_POINT);
+/// Requests the Limine bootloader to provide a map of the available physical memory.
+static MEMORY_MAP: Request<MemoryMap> = Request::new(MemoryMap);
+
+limine_reqs!(MEMORY_MAP, SMP, BOOTLOADER_INFO, MODULE, ENTRY_POINT);
 
 /// Removes the begining of a path, only keeping the what's after the last `/` character.
 fn get_filename(bytes: &[u8]) -> &[u8] {
@@ -61,20 +69,28 @@ fn find_init_program() -> Option<&'static File> {
 
 /// The entry point of the kernel when booted by the Limine bootloader.
 extern "C" fn entry_point() -> ! {
+    // SAFETY:
+    //  We're in the entry point, this function won't be called ever again.
     unsafe {
-        crate::arch::initialize();
+        #[cfg(target_arch = "x86_64")]
+        crate::arch::x86_64::initialize_logger();
+        #[cfg(target_arch = "x86_64")]
+        crate::arch::x86_64::initialize_tables();
     }
 
     if let Some(info) = BOOTLOADER_INFO.response() {
-        nd_log::info!("Loaded by '{}' (v{})", info.name(), info.version());
+        nd_log::info!("Loaded by '{}' (v{})!", info.name(), info.version());
     } else {
-        nd_log::info!("Loaded by a Limine-compliant bootloader");
+        nd_log::info!("Loaded by a Limine-compliant bootloader.");
     }
 
-    // SAFETY:
-    //  We're in the entry point, this function won't be called ever again.
     let Some(_smp) = SMP.response() else {
-        nd_log::error!("The Limine bootloader did not provide any information about other CPUs");
+        nd_log::error!("The Limine bootloader did not provide any information about other CPUs.");
+        crate::arch::die();
+    };
+
+    let Some(memmap) = MEMORY_MAP.response() else {
+        nd_log::error!("The Limine bootloader did not provide a map of the usable memory.");
         crate::arch::die();
     };
 
@@ -91,6 +107,32 @@ extern "C" fn entry_point() -> ! {
         nd_log::error!("");
         crate::arch::die();
     };
+
+    // Bootloader reclaimable memory and useable memory segments can be used by the kernel.
+    let available_memory = memmap
+        .entries()
+        .iter()
+        .filter(|e| {
+            matches!(
+                e.ty(),
+                MemMapEntryType::USABLE | MemMapEntryType::BOOTLOADER_RECLAIMABLE
+            )
+        })
+        .map(|e| MemorySegment {
+            base: e.base(),
+            length: e.length(),
+        });
+
+    // SAFETY:
+    //  We're in the entry point, this function won't ever be called again.
+    unsafe {
+        #[cfg(target_arch = "x86_64")]
+        crate::arch::x86_64::initialize_paging(available_memory);
+    }
+
+    // Note:
+    //  From this point, accessing any memory owned by the bootloader is undefined behavior.
+    //  The `initialize_paging` function may have overwritten the bootloader's memory.
 
     crate::init::load(nd_init.data());
 }
