@@ -4,6 +4,7 @@ members = [
     "crates/nd_init",
     "crates/boot/limine",
     "crates/arch/x86_64",
+    "crates/arch/apic",
     "crates/lib/neodym-sys-common",
     "crates/lib/neodym-sys",
     "crates/utility/log",

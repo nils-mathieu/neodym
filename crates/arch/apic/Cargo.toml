@@ -1,0 +1,14 @@
+[package]
+name = "nd_apic"
+version = "0.0.1"
+
+authors.workspace = true
+edition.workspace = true
+readme.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+nd_x86_64 = { path = "../x86_64" }
+
+bitflags = "2"

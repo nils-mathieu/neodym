@@ -2,7 +2,7 @@
 //! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md) bootloader.
 
 use nd_limine::limine_reqs;
-use nd_limine::{BootloaderInfo, EntryPoint, File, Module, Request};
+use nd_limine::{BootloaderInfo, EntryPoint, File, Module, Request, Smp, SmpRequestFlags};
 
 /// Requests the bootloader to provide information about itself, such as its name and version.
 /// Those information will be logged at startup.
@@ -17,7 +17,13 @@ static ENTRY_POINT: Request<EntryPoint> = Request::new(EntryPoint(entry_point));
 /// This module will contain the initial program to start after the kernel has initialize itself.
 static MODULE: Request<Module> = Request::new(Module::new(&[]));
 
-limine_reqs!(BOOTLOADER_INFO, MODULE, ENTRY_POINT);
+/// Requests the Limine bootloader to gather and provide information about the other processors,
+/// such as their local APIC ID.
+static SMP: Request<Smp> = Request::new(Smp {
+    flags: SmpRequestFlags::X2APIC,
+});
+
+limine_reqs!(SMP, BOOTLOADER_INFO, MODULE, ENTRY_POINT);
 
 /// Removes the begining of a path, only keeping the what's after the last `/` character.
 fn get_filename(bytes: &[u8]) -> &[u8] {
@@ -55,8 +61,6 @@ fn find_init_program() -> Option<&'static File> {
 
 /// The entry point of the kernel when booted by the Limine bootloader.
 extern "C" fn entry_point() -> ! {
-    // SAFETY:
-    //  We're in the entry point, this function won't be called ever again.
     unsafe {
         crate::arch::initialize();
     }
@@ -66,6 +70,13 @@ extern "C" fn entry_point() -> ! {
     } else {
         nd_log::info!("Loaded by a Limine-compliant bootloader");
     }
+
+    // SAFETY:
+    //  We're in the entry point, this function won't be called ever again.
+    let Some(_smp) = SMP.response() else {
+        nd_log::error!("The Limine bootloader did not provide any information about other CPUs");
+        crate::arch::die();
+    };
 
     // Load the initial program.
     let Some(nd_init) = find_init_program() else {

@@ -49,6 +49,9 @@ pub struct SmpResponse {
     cpus: *const *const SmpInfo,
 }
 
+unsafe impl Send for SmpResponse {}
+unsafe impl Sync for SmpResponse {}
+
 #[cfg(target_arch = "x86_64")]
 impl SmpResponse {
     /// Some flags provided by the bootloader.

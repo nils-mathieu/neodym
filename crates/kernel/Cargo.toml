@@ -17,3 +17,4 @@ nd_limine = { path = "../boot/limine" }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 nd_x86_64 = { path = "../arch/x86_64" }
+nd_apic = { path = "../arch/apic" }
