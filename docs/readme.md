@@ -28,3 +28,5 @@ Dawson R. Engler, M. Frans Kaashoek, and James O'Toole Jr.
 
 1. [Booting](booting.md)
 2. [System Calls](system_calls.md)
+
+And other miscellaneous [notes](notes.md).

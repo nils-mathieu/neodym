@@ -8,6 +8,7 @@ This directory contains all the crates that make up the Neodym project.
 - `boot/` contains implementation of bootloading protocols.
 - `utility/` contains utility crates, such as `nd_log`, which is used to gather log messages
   within the kernel.
+- `lib/` contains libraries which may be used by userland processes.
 - `kernel` is the kernel itself.
 - `nd_init` is the first process that the kernel starts. This will probably move to a separate
   repository at some point.
