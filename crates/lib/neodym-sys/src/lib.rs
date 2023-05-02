@@ -10,13 +10,7 @@
 
 #![no_std]
 
-use core::num::NonZeroUsize;
-
-pub mod raw;
-pub mod sched;
-
-/// A handle to a process.
-///
-/// Processes are identified by a unique handle by the kernel. This handle is used to interact with
-/// the process, for example to initate inter-process communication or to terminate the process.
-pub type ProcessHandle = NonZeroUsize;
+#[cfg(target_arch = "x86_64")]
+mod x86_64;
+#[cfg(target_arch = "x86_64")]
+pub use self::x86_64::*;

@@ -12,7 +12,7 @@ use core::panic::PanicInfo;
 fn handle_panic(_info: &PanicInfo) -> ! {
     // TODO:
     //  Exit the process properly.
-    neodym_sys::sched::terminate_self();
+    neodym_sys::terminate_self();
 }
 
 /// The entry point of the program.
@@ -22,7 +22,7 @@ fn handle_panic(_info: &PanicInfo) -> ! {
 #[no_mangle]
 extern "C" fn entry_point() -> ! {
     main();
-    neodym_sys::sched::terminate_self();
+    neodym_sys::terminate_self();
 }
 
 /// The main function of the program.

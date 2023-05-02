@@ -1,5 +1,5 @@
 [package]
-name = "neodym-sys"
+name = "neodym-sys-common"
 version = "0.0.1"
 
 authors.workspace = true
@@ -8,5 +8,5 @@ readme.workspace = true
 license.workspace = true
 repository.workspace = true
 
-[dependencies]
-neodym-sys-common = { path = "../neodym-sys-common" }
+[features]
+try_trait_v2 = []
