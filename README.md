@@ -3,6 +3,10 @@
 This repository is home of the Neodym Operating System. Neodym is an experimental
 [exokernel](https://en.wikipedia.org/wiki/Exokernel) and learning project.
 
+## State Of The Project
+
+Nothing to see yet! The project is still in its early stages of development.
+
 ## Hardware Support
 
 The kernel aims to support multiple CPU architecture (though it is currently mainly focused on

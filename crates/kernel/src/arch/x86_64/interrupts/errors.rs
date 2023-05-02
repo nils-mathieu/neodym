@@ -5,7 +5,10 @@ pub extern "x86-interrupt" fn double_fault(_: InterruptStackFrame, _: u64) -> ! 
 }
 
 pub extern "x86-interrupt" fn invalid_op_code(frame: InterruptStackFrame) {
-    panic!("Invalid Op Code (addr = {:#x}", frame.instruction_pointer());
+    panic!(
+        "Invalid Op Code (addr = {:#x})",
+        frame.instruction_pointer()
+    );
 }
 
 pub extern "x86-interrupt" fn device_not_available(_: InterruptStackFrame) {
