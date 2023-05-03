@@ -9,7 +9,9 @@ use core::num::NonZeroUsize;
 use core::ops::{ControlFlow, FromResidual, Try};
 
 #[cfg(target_arch = "x86_64")]
-pub mod x86_64;
+mod x86_64;
+#[cfg(target_arch = "x86_64")]
+pub use self::x86_64::*;
 
 /// The return value of a system call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

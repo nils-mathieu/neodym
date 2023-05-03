@@ -2,8 +2,7 @@
 
 use core::arch::asm;
 
-use neodym_sys_common::x86_64::SystemCall;
-use neodym_sys_common::SysResult;
+use neodym_sys_common::{SysResult, SystemCall};
 
 /// Performs a system call with no arguments.
 ///
