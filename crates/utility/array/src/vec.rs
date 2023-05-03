@@ -33,10 +33,16 @@ impl<T, const N: usize> Vec<T, N> {
         self.len == 0
     }
 
+    /// Returns the capacity of the vector.
+    #[inline(always)]
+    pub const fn capacity(&self) -> usize {
+        N
+    }
+
     /// Returns whether the vector is full.
     #[inline(always)]
     pub const fn is_full(&self) -> bool {
-        self.len == N
+        self.len == self.capacity()
     }
 
     /// Returns a pointer to the array backing this vector.
