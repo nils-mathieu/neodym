@@ -82,6 +82,13 @@ impl PageAllocator {
             cur = &node.next;
         }
 
+        // NOTE:
+        //  It is possible to get here while some memory is still available in the free list. This
+        //  can occur because of the `try_lock` above. This is *very* unlikely to happen. The more
+        //  free pages there are, the more likely we are to acquire a lock. If there are few free
+        //  pages, then either we're out of memory (or close to it), or we still have a lot of
+        //  memory available in the usable segments.
+
         // The index of the page that will be allocated.
         //
         // Relaxed ordering is sufficient here because we only care about the order of the
@@ -104,6 +111,17 @@ impl PageAllocator {
             page_index -= page_count;
             // not in this segment
         }
+
+        // This races with the `fetch_add` above, but if other threads are able to allocate enough
+        // pages to overflow an `usize` by the time we get here, then the system is probably having
+        // bigger issues than this.
+        //
+        // If `next_free` overflows, then used segments will start being allocated again. This is
+        // actually pretty bad, but there's not much we can do about it without using a lock.
+        //
+        // I think locking would actually be fine, but it's so unlikely that this will be an issue
+        // that the lock-free implementation is probably worth it.
+        self.next_free.store(page_index as usize, Relaxed);
 
         // We're out of memory :(
         None
@@ -132,6 +150,8 @@ impl PageAllocator {
 
         // We got to the end of the free list, and we didn't find a node that can store our
         // new page. We need to allocate a new node. We'll use the deallocated node for this.
+        //
+        // FIXME: This assumes identity mapping. A conversion to a virtual address is needed here.
         unsafe { (addr as *mut FreePageListNode).write(FreePageListNode::new()) };
 
         cur.store(addr as *mut _, Release);
@@ -291,4 +311,44 @@ pub unsafe fn initialize_page_allocator(usable: &mut dyn Iterator<Item = MemoryS
 
     #[cfg(debug_assertions)]
     PAGE_ALLOCATOR_INITIALIZED.store(true, Release);
+}
+
+/// A physical frame that have been allocated by the page allocator.
+///
+/// This type automatically deallocates the frame when it is dropped.
+pub struct PhysicalFrame(PhysAddr);
+
+impl PhysicalFrame {
+    /// Allocates a new [`PhysicalFrame`] using the global page allocator.
+    ///
+    /// # Safety
+    ///
+    /// The global page allocator must have been initialized.
+    ///
+    /// # Errors
+    ///
+    /// This function fails if the system is out of physical memory.
+    #[inline]
+    pub unsafe fn allocate() -> Option<Self> {
+        // SAFETY:
+        //  If the `PhysicalFrame` could be created, we know that the page allocator has been
+        //  initialized. This means that we can safely call `page_allocator()`.
+        unsafe { page_allocator().allocate().map(Self) }
+    }
+
+    /// Returns the physical address of the frame.
+    #[inline(always)]
+    pub const fn addr(&self) -> PhysAddr {
+        self.0
+    }
+}
+
+impl Drop for PhysicalFrame {
+    #[inline]
+    fn drop(&mut self) {
+        // SAFETY:
+        //  If the `PhysicalFrame` could be created, we know that the page allocator has been
+        //  initialized. This means that we can safely call `page_allocator()`.
+        unsafe { page_allocator().deallocate(self.0) };
+    }
 }
