@@ -67,17 +67,7 @@ impl Scheduler {
     /// The maximum number of slices which may be allocated at the same time.
     pub const MAX_SLICES: usize = 256;
 
-    /// Allocates a new time slice for this process.
-    ///
-    /// # Arguments
-    ///
-    /// - `process` is the handle to the process that has allocated this time slice.
-    ///
-    /// - `position` is the maximum number of ticks that this process is willing to wait before
-    /// the slice is executed. This is a *hint*, meaning that the scheduler may decide to execute
-    /// it earlier or later if its more convenient.
-    ///
-    /// - `ticks` the number of ticks that the process wants to be allocated.
+    /// Allocates a new time slice for a process.
     ///
     /// # Errors
     ///
@@ -100,11 +90,5 @@ impl Scheduler {
     pub fn next(&mut self) -> Option<Slice> {
         self.slices.pop();
         self.slices.peek().copied()
-    }
-}
-
-impl Drop for Scheduler {
-    fn drop(&mut self) {
-        todo!();
     }
 }

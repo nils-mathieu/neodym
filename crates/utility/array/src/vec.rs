@@ -33,6 +33,12 @@ impl<T, const N: usize> Vec<T, N> {
         self.len == 0
     }
 
+    /// Returns whether the vector is full.
+    #[inline(always)]
+    pub const fn is_full(&self) -> bool {
+        self.len == N
+    }
+
     /// Returns a pointer to the array backing this vector.
     #[inline(always)]
     pub const fn as_ptr(&self) -> *const T {
@@ -50,7 +56,7 @@ impl<T, const N: usize> Vec<T, N> {
     /// This function returns its input in case the vector is full.
     #[inline]
     pub fn push(&mut self, value: T) -> Result<(), T> {
-        if self.len >= N {
+        if self.is_full() {
             return Err(value);
         }
 

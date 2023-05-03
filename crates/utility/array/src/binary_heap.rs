@@ -32,6 +32,12 @@ impl<T, const N: usize> BinaryHeap<T, N> {
     pub const fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
+
+    /// Returns whether the heap is full.
+    #[inline(always)]
+    pub const fn is_full(&self) -> bool {
+        self.data.is_full()
+    }
 }
 
 impl<T, const N: usize> BinaryHeap<T, N>

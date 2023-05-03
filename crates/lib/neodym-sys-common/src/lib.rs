@@ -14,6 +14,7 @@ pub mod x86_64;
 /// The return value of a system call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[must_use = "this `SysResult` may be an error, which should be handled"]
+#[repr(transparent)]
 pub struct SysResult(pub usize);
 
 impl SysResult {
@@ -93,6 +94,7 @@ impl core::ops::FromResidual for SysResult {
 /// It is important to note that the "valid" values of this type do not start at zero, but at
 /// [`SysResult::FIRST_ERROR`].
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(transparent)]
 pub struct SysError(pub usize);
 
 /// This macro defines the constants of the [`SysError`] type, generating some additional functions
@@ -126,7 +128,7 @@ macro_rules! define_SysError_constants {
                     $(
                         Self::$name => $doc,
                     )*
-                    _ => "Unknown error",
+                    _ => "Unknown Error",
                 }
             }
         }
