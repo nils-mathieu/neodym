@@ -4,6 +4,7 @@
 #![cfg_attr(feature = "try_trait_v2", feature(try_trait_v2))]
 
 use core::fmt;
+use core::num::NonZeroUsize;
 #[cfg(feature = "try_trait_v2")]
 use core::ops::{ControlFlow, FromResidual, Try};
 
@@ -148,3 +149,6 @@ impl fmt::Display for SysError {
         f.pad(self.description())
     }
 }
+
+/// A unique identifier for a process in the system.
+pub type ProcessHandle = NonZeroUsize;

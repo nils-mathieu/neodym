@@ -4,11 +4,13 @@ mod apic;
 mod interrupts;
 mod logger;
 mod paging;
+mod process;
 mod tables;
 
 pub use self::apic::*;
 pub use self::logger::*;
 pub use self::paging::*;
+pub use self::process::*;
 pub use self::tables::*;
 
 /// Disables interrupts and halts the CPU.

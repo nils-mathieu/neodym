@@ -23,6 +23,7 @@
 mod arch;
 mod boot;
 mod init;
+mod process;
 
 /// This function is called when something in our code panics. This should be considered a serious
 /// bug in the kernel.
