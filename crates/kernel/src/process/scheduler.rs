@@ -1,10 +1,16 @@
 use core::cmp::Ordering;
 
+use nd_array::BinaryHeap;
 use neodym_sys_common::ProcessHandle;
 
 /// A time slice that has been allocated for a specific process.
+#[derive(Debug, Clone, Copy)]
 pub struct Slice {
     /// The process that this slice has been allocated for.
+    ///
+    /// Note that it is possible for a process to yield the remainder of their slice to another
+    /// process, in which case this field might not match the process that's actually running off
+    /// this slice.
     pub process: ProcessHandle,
     /// The number of ticks that were allocated for this slice.
     ///
@@ -53,7 +59,9 @@ impl PartialOrd for Slice {
 /// # Implementation
 ///
 /// The scheduler is implemented using a priority queue, itself implemented as a binary heap.
-pub struct Scheduler {}
+pub struct Scheduler {
+    slices: BinaryHeap<Slice, { Self::MAX_SLICES }>,
+}
 
 impl Scheduler {
     /// The maximum number of slices which may be allocated at the same time.
@@ -75,19 +83,23 @@ impl Scheduler {
     ///
     /// This function may return `false` if too many slices have been allocated and the scheduler
     /// is out of memory.
-    #[must_use = "This function may fail if the scheduler is out of memory."]
-    pub fn allocate(&mut self, slice: Slice) -> bool {
-        todo!();
+    pub fn allocate(&mut self, slice: Slice) -> Result<(), ()> {
+        match self.slices.push(slice) {
+            Ok(()) => Ok(()),
+            Err(_) => Err(()),
+        }
     }
 
-    /// Notifies the scheduler that a tick has passed.
-    ///
-    /// If this function returns [`Some(_)`], then a new process should be scheduled.
+    /// Notifies the scheduler that a time slice as expired and that another process should be
+    /// scheduled.
     ///
     /// Note that it is possible for the same process to be scheduled twice in a row. The caller
     /// should make sure not to preempt the current process if it is still running.
-    pub fn tick(&mut self) -> Option<ProcessHandle> {
-        todo!();
+    ///
+    /// If the returned value is `None`, then there is no more processes to schedule.
+    pub fn next(&mut self) -> Option<Slice> {
+        self.slices.pop();
+        self.slices.peek().copied()
     }
 }
 

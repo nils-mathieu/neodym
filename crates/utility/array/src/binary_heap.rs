@@ -51,20 +51,46 @@ where
     }
 
     /// Removes the greatest element from the heap and returns it.
+    #[inline]
     pub fn pop(&mut self) -> Option<T> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(unsafe { self.pop_unchecked() })
+        }
+    }
+
+    /// Removes the greatest element from the heap and returns it.
+    ///
+    /// # Safety
+    ///
+    /// The heap must not be empty.
+    pub unsafe fn pop_unchecked(&mut self) -> T {
         match self.data.len() {
-            0 => None,
-            1 => Some(unsafe { self.data.pop_unchecked() }),
+            0 => unsafe { core::hint::unreachable_unchecked() },
+            1 => self.data.pop_unchecked(),
             _ => {
                 // This swaps the first and the last element and returns the first one.
-                let result = unsafe { self.data.swap_remove_unchecked(0) };
+                let result = self.data.swap_remove_unchecked(0);
 
                 // Restore the heap invariant.
-                unsafe { self.sift_down_to_bottom(0) };
+                self.sift_down_to_bottom(0);
 
-                Some(result)
+                result
             }
         }
+    }
+
+    /// Returns a reference to the greatest element in the heap.
+    #[inline(always)]
+    pub fn peek(&self) -> Option<&T> {
+        self.data.first()
+    }
+
+    /// Returns a mutable reference to the greatest element in the heap.
+    #[inline(always)]
+    pub fn peek_mut(&mut self) -> Option<&mut T> {
+        self.data.first_mut()
     }
 
     /// Restores the heap invariant by sifting up the element at `pos`.
