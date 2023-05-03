@@ -73,10 +73,9 @@ fn find_init_program() -> Option<&'static File> {
 extern "C" fn entry_point() -> ! {
     // SAFETY:
     //  We're in the entry point, this function won't be called ever again.
+    #[cfg(target_arch = "x86_64")]
     unsafe {
-        #[cfg(target_arch = "x86_64")]
         crate::arch::x86_64::initialize_logger();
-        #[cfg(target_arch = "x86_64")]
         crate::arch::x86_64::initialize_tables();
     }
 
@@ -91,6 +90,17 @@ extern "C" fn entry_point() -> ! {
         crate::arch::die();
     };
 
+    let Some(kernel_address) = KERNEL_ADDRESS.response() else {
+        nd_log::error!("The Limine bootloader did not provide the address of the kernel.");
+        crate::arch::die();
+    };
+
+    nd_log::trace!(
+        "Kernel located at {:#x}, mapped at {:#x}.",
+        kernel_address.physical_base(),
+        kernel_address.virtual_base()
+    );
+
     // Load the initial program.
     let Some(nd_init) = find_init_program() else {
         nd_log::error!("An `nd_init` module is expected along with the kernel.");
@@ -104,17 +114,6 @@ extern "C" fn entry_point() -> ! {
         nd_log::error!("");
         crate::arch::die();
     };
-
-    let Some(kernel_address) = KERNEL_ADDRESS.response() else {
-        nd_log::error!("The Limine bootloader did not provide the address of the kernel.");
-        crate::arch::die();
-    };
-
-    nd_log::trace!(
-        "Kernel located at {:#x}, mapped at {:#x}.",
-        kernel_address.physical_base(),
-        kernel_address.virtual_base()
-    );
 
     // Bootloader reclaimable memory and useable memory segments can be used by the kernel.
     let mut available_memory = memmap
