@@ -9,6 +9,7 @@ members = [
     "crates/lib/neodym-sys",
     "crates/utility/log",
     "crates/utility/array",
+    "crates/utility/spin",
 ]
 resolver = "2"
 

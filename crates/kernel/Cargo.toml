@@ -12,6 +12,7 @@ repository.workspace = true
 [dependencies]
 nd_log = { path = "../utility/log" }
 nd_array = { path = "../utility/array" }
+nd_spin = { path = "../utility/spin" }
 neodym-sys-common = { path = "../lib/neodym-sys-common" }
 
 [target.'cfg(any(target_arch = "x86_64", target_arch = "aarch64"))'.dependencies]
