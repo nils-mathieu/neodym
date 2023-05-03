@@ -1,6 +1,6 @@
 use nd_x86_64::{
-    DescriptorTable, GateType, Idt, IstIndex, PrivilegeLevel, SegmentDescriptor, SegmentSelector,
-    TablePtr, Tss, VirtAddr,
+    DescriptorTable, GateDescriptor, GateType, Idt, IstIndex, PrivilegeLevel, SegmentDescriptor,
+    SegmentSelector, TablePtr, Tss, VirtAddr,
 };
 
 /// The global descriptor table that we are going to load. We can't use a simple array because some
@@ -92,68 +92,83 @@ pub unsafe fn initialize_tables() {
 
         // Initialize the IDT.
         nd_log::trace!("Setting up the IDT...");
-        macro_rules! set_idt_handler {
+        macro_rules! set_exception_handler {
             ($f:ident, $handler:expr) => {
                 IDT.$f($handler, cs, None, GateType::Trap, PrivilegeLevel::Ring0);
             };
         }
+        macro_rules! set_interrupt_handler {
+            ($index:expr, $handler:expr) => {
+                IDT[$index] = GateDescriptor::new(
+                    $handler as usize as u64,
+                    cs,
+                    None,
+                    GateType::Interrupt,
+                    PrivilegeLevel::Ring0,
+                    true,
+                );
+            };
+        }
 
-        set_idt_handler!(set_division_error, super::interrupts::division_error);
-        set_idt_handler!(set_breakpoint, super::interrupts::breakpoint);
-        set_idt_handler!(
+        set_exception_handler!(set_division_error, super::interrupts::division_error);
+        set_exception_handler!(set_breakpoint, super::interrupts::breakpoint);
+        set_exception_handler!(
             set_bound_range_exceeded,
             super::interrupts::bound_range_exceeded
         );
-        set_idt_handler!(set_invalid_op_code, super::interrupts::invalid_op_code);
-        set_idt_handler!(
+        set_exception_handler!(set_invalid_op_code, super::interrupts::invalid_op_code);
+        set_exception_handler!(
             set_device_not_available,
             super::interrupts::device_not_available
         );
-        set_idt_handler!(set_double_fault, super::interrupts::double_fault);
-        set_idt_handler!(set_invalid_tss, super::interrupts::invalid_tss);
-        set_idt_handler!(
+        set_exception_handler!(set_double_fault, super::interrupts::double_fault);
+        set_exception_handler!(set_invalid_tss, super::interrupts::invalid_tss);
+        set_exception_handler!(
             set_segment_not_present,
             super::interrupts::segment_not_present
         );
-        set_idt_handler!(
+        set_exception_handler!(
             set_stack_segment_fault,
             super::interrupts::stack_segment_fault
         );
-        set_idt_handler!(
+        set_exception_handler!(
             set_general_protection_fault,
             super::interrupts::general_protection_fault
         );
-        set_idt_handler!(set_page_fault, super::interrupts::page_fault);
-        set_idt_handler!(
+        set_exception_handler!(set_page_fault, super::interrupts::page_fault);
+        set_exception_handler!(
             set_x87_floating_point_exception,
             super::interrupts::x87_floating_point_exception
         );
-        set_idt_handler!(set_alignment_check, super::interrupts::alignment_check);
-        set_idt_handler!(set_machine_check, super::interrupts::machine_check);
-        set_idt_handler!(
+        set_exception_handler!(set_alignment_check, super::interrupts::alignment_check);
+        set_exception_handler!(set_machine_check, super::interrupts::machine_check);
+        set_exception_handler!(
             set_simd_floating_point_exception,
             super::interrupts::simd_floating_point_exception
         );
-        set_idt_handler!(
+        set_exception_handler!(
             set_virtualization_exception,
             super::interrupts::virtualization_exception
         );
-        set_idt_handler!(
+        set_exception_handler!(
             set_control_protection_exception,
             super::interrupts::control_protection_exception
         );
-        set_idt_handler!(
+        set_exception_handler!(
             set_hypervisor_injection_exception,
             super::interrupts::hypervisor_injection_exception
         );
-        set_idt_handler!(
+        set_exception_handler!(
             set_vmm_communication_exception,
             super::interrupts::vmm_communication_exception
         );
-        set_idt_handler!(
+        set_exception_handler!(
             set_security_exception,
             super::interrupts::security_exception
         );
+
+        set_interrupt_handler!(32, super::interrupts::apic_timer);
+        set_interrupt_handler!(39, super::interrupts::apic_spurious);
 
         nd_x86_64::lidt(&IDT.table_ptr());
     }

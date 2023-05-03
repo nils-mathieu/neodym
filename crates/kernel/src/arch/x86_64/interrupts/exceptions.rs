@@ -86,3 +86,7 @@ pub extern "x86-interrupt" fn security_exception(_: InterruptStackFrame, _: u64)
 pub extern "x86-interrupt" fn bound_range_exceeded(_: InterruptStackFrame) {
     panic!("Bound Range Exceeded");
 }
+
+pub extern "x86-interrupt" fn breakpoint(_: InterruptStackFrame) {
+    nd_log::info!("BREAKPOINT");
+}

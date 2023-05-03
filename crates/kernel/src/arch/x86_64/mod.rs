@@ -1,10 +1,12 @@
 //! Code specific to the `x86_64` CPU architecture.
 
+mod apic;
 mod interrupts;
 mod logger;
 mod paging;
 mod tables;
 
+pub use self::apic::*;
 pub use self::logger::*;
 pub use self::paging::*;
 pub use self::tables::*;

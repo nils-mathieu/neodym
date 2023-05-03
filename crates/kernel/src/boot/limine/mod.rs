@@ -129,9 +129,11 @@ extern "C" fn entry_point() -> ! {
     //  We're in the entry point, this function won't ever be called again.
     //  The Limine bootloader identity maps the whole address space, from 0x1000 up to roughly
     //  four gigabytes, ensuring that the page tables are properly identity mapped.
+    #[cfg(target_arch = "x86_64")]
     unsafe {
-        #[cfg(target_arch = "x86_64")]
         crate::arch::x86_64::initialize_paging(&mut available_memory);
+        crate::arch::x86_64::initialize_lapic();
+        nd_x86_64::sti();
     }
 
     // Note:
