@@ -3,8 +3,7 @@
 
 use nd_limine::limine_reqs;
 use nd_limine::{
-    BootloaderInfo, EntryPoint, File, MemMapEntryType, MemoryMap, Module, Request, Smp,
-    SmpRequestFlags,
+    BootloaderInfo, EntryPoint, File, KernelAddress, MemMapEntryType, MemoryMap, Module, Request,
 };
 
 use crate::arch::x86_64::MemorySegment;
@@ -22,16 +21,19 @@ static ENTRY_POINT: Request<EntryPoint> = Request::new(EntryPoint(entry_point));
 /// This module will contain the initial program to start after the kernel has initialize itself.
 static MODULE: Request<Module> = Request::new(Module::new(&[]));
 
-/// Requests the Limine bootloader to gather and provide information about the other processors,
-/// such as their local APIC ID.
-static SMP: Request<Smp> = Request::new(Smp {
-    flags: SmpRequestFlags::X2APIC,
-});
+/// Requests the Limine bootloader to provide the address of the kernel in physical memory.
+static KERNEL_ADDRESS: Request<KernelAddress> = Request::new(KernelAddress);
 
 /// Requests the Limine bootloader to provide a map of the available physical memory.
 static MEMORY_MAP: Request<MemoryMap> = Request::new(MemoryMap);
 
-limine_reqs!(MEMORY_MAP, SMP, BOOTLOADER_INFO, MODULE, ENTRY_POINT);
+limine_reqs!(
+    MEMORY_MAP,
+    BOOTLOADER_INFO,
+    MODULE,
+    ENTRY_POINT,
+    KERNEL_ADDRESS,
+);
 
 /// Removes the begining of a path, only keeping the what's after the last `/` character.
 fn get_filename(bytes: &[u8]) -> &[u8] {
@@ -84,11 +86,6 @@ extern "C" fn entry_point() -> ! {
         nd_log::info!("Loaded by a Limine-compliant bootloader.");
     }
 
-    let Some(_smp) = SMP.response() else {
-        nd_log::error!("The Limine bootloader did not provide any information about other CPUs.");
-        crate::arch::die();
-    };
-
     let Some(memmap) = MEMORY_MAP.response() else {
         nd_log::error!("The Limine bootloader did not provide a map of the usable memory.");
         crate::arch::die();
@@ -108,16 +105,22 @@ extern "C" fn entry_point() -> ! {
         crate::arch::die();
     };
 
+    let Some(kernel_address) = KERNEL_ADDRESS.response() else {
+        nd_log::error!("The Limine bootloader did not provide the address of the kernel.");
+        crate::arch::die();
+    };
+
+    nd_log::trace!(
+        "Kernel located at {:#x}, mapped at {:#x}.",
+        kernel_address.physical_base(),
+        kernel_address.virtual_base()
+    );
+
     // Bootloader reclaimable memory and useable memory segments can be used by the kernel.
-    let available_memory = memmap
+    let mut available_memory = memmap
         .entries()
         .iter()
-        .filter(|e| {
-            matches!(
-                e.ty(),
-                MemMapEntryType::USABLE | MemMapEntryType::BOOTLOADER_RECLAIMABLE
-            )
-        })
+        .filter(|e| matches!(e.ty(), MemMapEntryType::USABLE))
         .map(|e| MemorySegment {
             base: e.base(),
             length: e.length(),
@@ -125,9 +128,11 @@ extern "C" fn entry_point() -> ! {
 
     // SAFETY:
     //  We're in the entry point, this function won't ever be called again.
+    //  The Limine bootloader identity maps the whole address space, from 0x1000 up to roughly
+    //  four gigabytes, ensuring that the page tables are properly identity mapped.
     unsafe {
         #[cfg(target_arch = "x86_64")]
-        crate::arch::x86_64::initialize_paging(available_memory);
+        crate::arch::x86_64::initialize_paging(&mut available_memory);
     }
 
     // Note:

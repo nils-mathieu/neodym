@@ -80,11 +80,10 @@ pub unsafe fn initialize_tables() {
         );
 
         let cs = SegmentSelector::new(1, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
-        let ss = SegmentSelector::new(0, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
 
         nd_x86_64::lgdt(&GDT.table_ptr());
         nd_x86_64::set_cs(cs);
-        nd_x86_64::set_ss(ss);
+        nd_x86_64::set_ss(SegmentSelector::from_raw(0));
         nd_x86_64::ltr(SegmentSelector::new(
             5,
             DescriptorTable::Gdt,

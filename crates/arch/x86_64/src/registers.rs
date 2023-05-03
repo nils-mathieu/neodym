@@ -203,7 +203,7 @@ impl fmt::Debug for Cr3 {
 
 /// Gets the value of the **CR3** register.
 #[inline(always)]
-pub fn get_cr3() -> Cr3 {
+pub fn cr3() -> Cr3 {
     let ret: u64;
     unsafe {
         asm!("mov {}, cr3", out(reg) ret, options(nostack, preserves_flags));

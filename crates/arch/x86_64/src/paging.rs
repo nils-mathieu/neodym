@@ -1,5 +1,6 @@
 use bitflags::bitflags;
 use core::fmt;
+use core::ops::{Deref, DerefMut};
 
 use crate::PhysAddr;
 
@@ -104,5 +105,21 @@ impl PageTable {
     /// Creates a new empty page table.
     pub const fn new() -> Self {
         PageTable([PageTableEntry::UNUSED; 512])
+    }
+}
+
+impl Deref for PageTable {
+    type Target = [PageTableEntry; 512];
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for PageTable {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }

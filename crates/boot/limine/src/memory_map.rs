@@ -40,7 +40,7 @@ unsafe impl Sync for MemoryMapResponse {}
 
 /// Information about a specific memory region.
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct MemMapEntry {
     base: u64,
     length: u64,
@@ -64,6 +64,16 @@ impl MemMapEntry {
     #[inline(always)]
     pub fn ty(&self) -> MemMapEntryType {
         self.ty
+    }
+}
+
+impl fmt::Debug for MemMapEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MemMapEntry")
+            .field("base", &format_args!("{:#x}", self.base))
+            .field("length", &format_args!("{:#x}", self.length))
+            .field("ty", &self.ty)
+            .finish()
     }
 }
 
