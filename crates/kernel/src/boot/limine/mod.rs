@@ -2,9 +2,7 @@
 //! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md) bootloader.
 
 use nd_limine::limine_reqs;
-use nd_limine::{
-    BootloaderInfo, EntryPoint, File, KernelAddress, MemMapEntryType, MemoryMap, Module, Request,
-};
+use nd_limine::{BootloaderInfo, EntryPoint, File, MemMapEntryType, MemoryMap, Module, Request};
 
 use crate::arch::x86_64::MemorySegment;
 
@@ -21,19 +19,10 @@ static ENTRY_POINT: Request<EntryPoint> = Request::new(EntryPoint(entry_point));
 /// This module will contain the initial program to start after the kernel has initialize itself.
 static MODULE: Request<Module> = Request::new(Module::new(&[]));
 
-/// Requests the Limine bootloader to provide the address of the kernel in physical memory.
-static KERNEL_ADDRESS: Request<KernelAddress> = Request::new(KernelAddress);
-
 /// Requests the Limine bootloader to provide a map of the available physical memory.
 static MEMORY_MAP: Request<MemoryMap> = Request::new(MemoryMap);
 
-limine_reqs!(
-    MEMORY_MAP,
-    BOOTLOADER_INFO,
-    MODULE,
-    ENTRY_POINT,
-    KERNEL_ADDRESS,
-);
+limine_reqs!(MEMORY_MAP, BOOTLOADER_INFO, MODULE, ENTRY_POINT);
 
 /// Removes the begining of a path, only keeping the what's after the last `/` character.
 fn get_filename(bytes: &[u8]) -> &[u8] {
@@ -90,17 +79,6 @@ extern "C" fn entry_point() -> ! {
         crate::arch::die();
     };
 
-    let Some(kernel_address) = KERNEL_ADDRESS.response() else {
-        nd_log::error!("The Limine bootloader did not provide the address of the kernel.");
-        crate::arch::die();
-    };
-
-    nd_log::trace!(
-        "Kernel located at {:#x}, mapped at {:#x}.",
-        kernel_address.physical_base(),
-        kernel_address.virtual_base()
-    );
-
     // Load the initial program.
     let Some(nd_init) = find_init_program() else {
         nd_log::error!("An `nd_init` module is expected along with the kernel.");
@@ -131,7 +109,7 @@ extern "C" fn entry_point() -> ! {
     //  four gigabytes, ensuring that the page tables are properly identity mapped.
     #[cfg(target_arch = "x86_64")]
     unsafe {
-        crate::arch::x86_64::initialize_paging(&mut available_memory);
+        crate::arch::x86_64::initialize_page_allocator(&mut available_memory);
         crate::arch::x86_64::initialize_lapic();
         nd_x86_64::sti();
     }

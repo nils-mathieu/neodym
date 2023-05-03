@@ -1,6 +1,6 @@
 use core::cell::UnsafeCell;
 use core::mem::ManuallyDrop;
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 use core::sync::atomic::AtomicBool;
 use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
@@ -38,6 +38,23 @@ impl<T> Mutex<T> {
     #[inline(always)]
     pub fn is_locked(&self) -> bool {
         self.lock.load(Relaxed)
+    }
+
+    /// Attempts to lock the mutex, returning `None` if it is already locked.
+    #[inline]
+    pub fn try_lock(&self) -> Option<MutexLock<T>> {
+        if self
+            .lock
+            .compare_exchange(false, true, Acquire, Relaxed)
+            .is_ok()
+        {
+            Some(MutexLock {
+                value: unsafe { &mut *self.value.get() },
+                lock: &self.lock,
+            })
+        } else {
+            None
+        }
     }
 
     /// Locks the mutex and returns a guard that releases the lock when dropped.
@@ -107,6 +124,13 @@ impl<'a, T> Deref for MutexLock<'a, T> {
 
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
+        self.value
+    }
+}
+
+impl<'a, T> DerefMut for MutexLock<'a, T> {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Self::Target {
         self.value
     }
 }

@@ -202,3 +202,23 @@ impl<T, const N: usize> Drop for Vec<T, N> {
         }
     }
 }
+
+impl<'a, T, const N: usize> IntoIterator for &'a Vec<T, N> {
+    type IntoIter = core::slice::Iter<'a, T>;
+    type Item = &'a T;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a, T, const N: usize> IntoIterator for &'a mut Vec<T, N> {
+    type IntoIter = core::slice::IterMut<'a, T>;
+    type Item = &'a mut T;
+
+    #[inline(always)]
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}

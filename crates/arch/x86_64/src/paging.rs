@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use core::fmt;
 use core::ops::{Deref, DerefMut};
 
-use crate::PhysAddr;
+use crate::{PhysAddr, VirtAddr};
 
 bitflags! {
     /// Some flags for a page table entry.
@@ -122,4 +122,45 @@ impl DerefMut for PageTable {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
+}
+
+/// Translates a virtual address into a physical address.
+///
+/// The `get_table` function is used to convert the physical address of a page table into a
+/// reference to it (e.g. a `&PageTable`).
+pub fn virtual_to_physical<'a, F>(virt: VirtAddr, mut get_table: F) -> Option<PhysAddr>
+where
+    F: FnMut(PhysAddr) -> &'a PageTable,
+{
+    let l4_idx = (virt >> 39) & 0o777;
+    let l3_idx = (virt >> 30) & 0o777;
+    let l2_idx = (virt >> 21) & 0o777;
+    let l1_idx = (virt >> 12) & 0o777;
+    let offset = virt & 0xfff;
+
+    let l4 = get_table(crate::cr3().addr());
+    let l3_entry = unsafe { l4.get_unchecked(l4_idx as usize) };
+    if !l3_entry.flags().contains(PageTableFlags::PRESENT) {
+        return None;
+    }
+
+    let l3 = get_table(l3_entry.addr());
+    let l2_entry = unsafe { l3.get_unchecked(l3_idx as usize) };
+    if !l2_entry.flags().contains(PageTableFlags::PRESENT) {
+        return None;
+    }
+
+    let l2 = get_table(l2_entry.addr());
+    let l1_entry = unsafe { l2.get_unchecked(l2_idx as usize) };
+    if !l1_entry.flags().contains(PageTableFlags::PRESENT) {
+        return None;
+    }
+
+    let l1 = get_table(l1_entry.addr());
+    let l1_entry = unsafe { l1.get_unchecked(l1_idx as usize) };
+    if !l1_entry.flags().contains(PageTableFlags::PRESENT) {
+        return None;
+    }
+
+    Some((l1_entry.addr() & !0xfff) | offset)
 }
