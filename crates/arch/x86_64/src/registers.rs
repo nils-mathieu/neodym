@@ -7,6 +7,59 @@ use crate::{PhysAddr, SegmentSelector, VirtAddr};
 use core::arch::asm;
 use core::fmt;
 
+bitflags! {
+    /// The flags that the CPU keeps track of.
+    #[derive(Debug, Clone, Copy)]
+    pub struct RFlags: u64 {
+        /// Set by the CPU if the last arithmetic operation resulted in a carry out of the
+        /// most-significant bit of the result.
+        const CARRY = 1 << 0;
+        /// Set by the CPU if the last result has an even number of 1 bits (this flag is not set
+        /// for all operations).
+        const PARITY = 1 << 2;
+        /// Set by the CPU if the last arithmetic operation resulted in a carry out of bit 3 of the
+        /// result.
+        const AUXILIARY_CARRY = 1 << 4;
+        /// Set by the CPU if the last arithmetic resulted in a zero.
+        const ZERO = 1 << 6;
+        /// Set by the CPU if the last arithmetic operation resulted in a negative number.
+        const SIGN = 1 << 7;
+        /// Enables signle-step mode for debugging.
+        const TRAP = 1 << 8;
+        /// Enables interrupts.
+        const INTERRUPT = 1 << 9;
+        /// Determines the direction of string instructions.
+        const DIRECTION = 1 << 10;
+        /// Set by the CPU when the sign bit of the reuslt of the last signed integer operation
+        /// differs from the source operand.
+        const OVERFLOW = 1 << 11;
+        /// Used by `iret` in hardware task switch mode to determine if the current task is nested.
+        const NESTED_TASK = 1 << 14;
+        /// Allows to restart an instruction following an instruction breakpoint.
+        const RESUME = 1 << 16;
+        /// Enables virtual-8086 mode.
+        const VIRTUAL_8086 = 1 << 17;
+        /// Enables automatic alignment checking. Only works in ring 3.
+        const ALIGNMENT_CHECK = 1 << 18;
+        ///
+        const VIRTUAL_INTERRUPT = 1 << 19;
+        /// Indicates that an external maskable interrupt is pending.
+        const VIRTUAL_INTERRUPT_PENDING = 1 << 20;
+        /// If this flag is modifiable, then the CPUID instruction is supported.
+        const ID = 1 << 21;
+    }
+}
+
+/// Returns the value of the **RFLAGS** register,
+#[inline(always)]
+pub unsafe fn rflags() -> RFlags {
+    unsafe {
+        let ret: u64;
+        asm!("pushfq; pop {}", out(reg) ret, options(nomem, preserves_flags));
+        RFlags::from_bits_retain(ret)
+    }
+}
+
 /// Sets the value of the **CS** register.
 #[inline]
 pub unsafe fn set_cs(sel: SegmentSelector) {

@@ -1,5 +1,5 @@
 use nd_log::Verbosity;
-use nd_x86_64::{inb, outb};
+use nd_x86_64::{inb, outb, RFlags};
 
 use core::fmt;
 use core::fmt::Write as _;
@@ -30,12 +30,24 @@ pub unsafe fn initialize_logger() {
             Verbosity::Trace => "  Trace ",
         };
 
+        let restore_interrupts = unsafe { nd_x86_64::rflags().contains(RFlags::INTERRUPT) };
+
+        if restore_interrupts {
+            // Prevent interrupts while we are writing, ensuring that
+            // the output is not corrupted.
+            unsafe { nd_x86_64::cli() };
+        }
+
         // SAFETY:
         //  We're setting the global logger *after* having initialized the serial output port,
         //  ensuring that the `get_unchecked` function is safe.
         let mut serial_out = unsafe { SerialOut::get_unchecked() };
 
         let _ = writeln!(serial_out, "{prefix}{}", record.message);
+
+        if restore_interrupts {
+            unsafe { nd_x86_64::sti() };
+        }
     });
 
     nd_log::trace!("Logger initialized.");
