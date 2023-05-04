@@ -7,6 +7,13 @@ This repository is home of the Neodym Operating System. Neodym is an experimenta
 
 Nothing to see yet! The project is still in its early stages of development.
 
+## Installation Guide
+
+At the moment, no pre-compiled binaries for the Neodym operating system are available. The project
+is modified basically every day and keeping those up to date would be impossible.
+
+If you want to try out Neodym, you can follow the [installation guid](INSTALLATION.md)!
+
 ## Hardware Support
 
 The kernel aims to support multiple CPU architecture (though it is currently mainly focused on
