@@ -2,7 +2,9 @@
 //! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md) bootloader.
 
 use nd_limine::limine_reqs;
-use nd_limine::{BootloaderInfo, EntryPoint, File, MemMapEntryType, MemoryMap, Module, Request};
+use nd_limine::{
+    BootloaderInfo, EntryPoint, File, Hhdm, MemMapEntryType, MemoryMap, Module, Request,
+};
 
 use crate::arch::x86_64::MemorySegment;
 
@@ -22,7 +24,13 @@ static MODULE: Request<Module> = Request::new(Module::new(&[]));
 /// Requests the Limine bootloader to provide a map of the available physical memory.
 static MEMORY_MAP: Request<MemoryMap> = Request::new(MemoryMap);
 
-limine_reqs!(MEMORY_MAP, BOOTLOADER_INFO, MODULE, ENTRY_POINT);
+/// The Limine bootloader maps the entierty of the physical memory to the higher half of the
+/// virtual address space.
+///
+/// This request provides the address of th *Higher Half Direct Map* offset.
+static HHDM: Request<Hhdm> = Request::new(Hhdm);
+
+limine_reqs!(MEMORY_MAP, BOOTLOADER_INFO, MODULE, ENTRY_POINT, HHDM);
 
 /// Removes the begining of a path, only keeping the what's after the last `/` character.
 fn get_filename(bytes: &[u8]) -> &[u8] {
@@ -79,6 +87,11 @@ extern "C" fn entry_point() -> ! {
         crate::arch::die();
     };
 
+    let Some(hhdm) = HHDM.response() else {
+        nd_log::error!("The Limine bootloader did not provide the HHDM offset.");
+        crate::arch::die();
+    };
+
     // Load the initial program.
     let Some(nd_init) = find_init_program() else {
         nd_log::error!("An `nd_init` module is expected along with the kernel.");
@@ -109,7 +122,7 @@ extern "C" fn entry_point() -> ! {
     //  four gigabytes, ensuring that the page tables are properly identity mapped.
     #[cfg(target_arch = "x86_64")]
     unsafe {
-        crate::arch::x86_64::initialize_page_allocator(&mut available_memory);
+        crate::arch::x86_64::initialize_page_allocator(&mut available_memory, hhdm.offset());
         crate::arch::x86_64::initialize_lapic();
         nd_x86_64::sti();
     }

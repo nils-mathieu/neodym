@@ -5,7 +5,7 @@ use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize};
 
 use nd_array::Vec;
 use nd_spin::Mutex;
-use nd_x86_64::PhysAddr;
+use nd_x86_64::{PhysAddr, VirtAddr};
 
 /// A memory segment that is useable by the kernel.
 #[derive(Debug, Clone, Copy)]
@@ -28,7 +28,7 @@ struct FreePageListNode {
     pages: Mutex<Vec<PhysAddr, { Self::MAX_PAGES }>>,
 }
 
-const _: () = assert!(size_of::<FreePageListNode>() <= 4096);
+const _: () = assert!(size_of::<FreePageListNode>() == 4096);
 
 impl FreePageListNode {
     /// The maximum number of pages that can be stored in a single node.
@@ -59,13 +59,34 @@ pub struct PageAllocator {
     next_free: AtomicUsize,
     /// The list of free pages.
     free_pages: AtomicPtr<FreePageListNode>,
+    /// The offset of the *Higher Half Direct Map*.
+    ///
+    /// The higher half direct map is a direct mapping of the physical memory at the top of the
+    /// address space.
+    higher_half_direct_map: VirtAddr,
 }
 
 impl PageAllocator {
     /// The maximum number of segments that can be managed by the page allocator.
     pub const MAX_SEGMENT_COUNT: usize = 16;
 
+    /// Converts a virtual address to a physical address.
+    #[inline(always)]
+    pub fn virtual_to_physical(&self, virt: VirtAddr) -> PhysAddr {
+        virt - self.higher_half_direct_map
+    }
+
+    /// Converts a physical address to a virtual address.
+    #[inline(always)]
+    pub fn physical_to_virtual(&self, phys: PhysAddr) -> VirtAddr {
+        phys + self.higher_half_direct_map
+    }
+
     /// Allocates a new physical page.
+    ///
+    /// The returned physical address is guaranteed to be page-aligned.
+    ///
+    /// Note that you can return the page to the allocator by calling [`PageAllocator::deallocate`].
     pub fn allocate(&self) -> Option<PhysAddr> {
         // First, attempt to find a page in the free list.
         let mut cur = &self.free_pages;
@@ -75,6 +96,10 @@ impl PageAllocator {
 
             // We use `try_lock` to avoid spinning on the lock. If this node is locked, we can just
             // skip it and try the next one.
+            //
+            // FIXME:
+            //  once a page is empty (and `pages.pop()` fails), it remains in the linked list.
+            //  I'm not sure how to safely remove it from the list without a lock.
             if let Some(page) = node.pages.try_lock().and_then(|mut pages| pages.pop()) {
                 return Some(page);
             }
@@ -150,11 +175,11 @@ impl PageAllocator {
 
         // We got to the end of the free list, and we didn't find a node that can store our
         // new page. We need to allocate a new node. We'll use the deallocated node for this.
-        //
-        // FIXME: This assumes identity mapping. A conversion to a virtual address is needed here.
-        unsafe { (addr as *mut FreePageListNode).write(FreePageListNode::new()) };
+        let page_node_ptr = self.physical_to_virtual(addr) as *mut FreePageListNode;
 
-        cur.store(addr as *mut _, Release);
+        unsafe { page_node_ptr.write(FreePageListNode::new()) };
+
+        cur.store(page_node_ptr, Release);
     }
 }
 
@@ -257,7 +282,12 @@ pub unsafe fn page_allocator() -> &'static PageAllocator {
 ///
 /// Also, after this function has been called, the page tables will be logically owned by the
 /// page allocator. Accessing it outside of the module will trigger undefined behavior.
-pub unsafe fn initialize_page_allocator(usable: &mut dyn Iterator<Item = MemorySegment>) {
+///
+/// A higher-half direct map must be set up at `hhdr`.
+pub unsafe fn initialize_page_allocator(
+    usable: &mut dyn Iterator<Item = MemorySegment>,
+    hhdr: VirtAddr,
+) {
     #[cfg(debug_assertions)]
     assert!(
         !is_initialized(),
@@ -306,6 +336,7 @@ pub unsafe fn initialize_page_allocator(usable: &mut dyn Iterator<Item = MemoryS
             segments,
             next_free: AtomicUsize::new(0),
             free_pages: AtomicPtr::new(core::ptr::null_mut()),
+            higher_half_direct_map: hhdr,
         });
     }
 
@@ -316,7 +347,9 @@ pub unsafe fn initialize_page_allocator(usable: &mut dyn Iterator<Item = MemoryS
 /// A physical frame that have been allocated by the page allocator.
 ///
 /// This type automatically deallocates the frame when it is dropped.
-pub struct PhysicalFrame(PhysAddr);
+pub struct PhysicalFrame {
+    phys_addr: PhysAddr,
+}
 
 impl PhysicalFrame {
     /// Allocates a new [`PhysicalFrame`] using the global page allocator.
@@ -330,16 +363,31 @@ impl PhysicalFrame {
     /// This function fails if the system is out of physical memory.
     #[inline]
     pub unsafe fn allocate() -> Option<Self> {
+        let allocator = unsafe { page_allocator() };
+
         // SAFETY:
         //  If the `PhysicalFrame` could be created, we know that the page allocator has been
         //  initialized. This means that we can safely call `page_allocator()`.
-        unsafe { page_allocator().allocate().map(Self) }
+        let addr = allocator.allocate()?;
+
+        Some(Self { phys_addr: addr })
     }
 
     /// Returns the physical address of the frame.
     #[inline(always)]
-    pub const fn addr(&self) -> PhysAddr {
-        self.0
+    pub const fn phys_addr(&self) -> PhysAddr {
+        self.phys_addr
+    }
+
+    /// Returns the virtual address of the frame.
+    #[inline(always)]
+    pub fn virt_addr(&self) -> VirtAddr {
+        // SAFETY:
+        //  If the `PhysicalFrame` could be created, we know that the page allocator has been
+        //  initialized.
+        let allocator = unsafe { page_allocator() };
+
+        allocator.physical_to_virtual(self.phys_addr)
     }
 }
 
@@ -349,6 +397,6 @@ impl Drop for PhysicalFrame {
         // SAFETY:
         //  If the `PhysicalFrame` could be created, we know that the page allocator has been
         //  initialized. This means that we can safely call `page_allocator()`.
-        unsafe { page_allocator().deallocate(self.0) };
+        unsafe { page_allocator().deallocate(self.phys_addr) };
     }
 }
