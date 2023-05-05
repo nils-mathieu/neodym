@@ -127,9 +127,7 @@ extern "C" fn entry_point() -> ! {
         nd_x86_64::sti();
     }
 
-    // Note:
-    //  From this point, accessing any memory owned by the bootloader is undefined behavior.
-    //  The `initialize_paging` function may have overwritten the bootloader's memory.
+    crate::process::load_init_program(nd_init.data());
 
-    crate::init::load(nd_init.data());
+    todo!("Start the scheduler here.");
 }

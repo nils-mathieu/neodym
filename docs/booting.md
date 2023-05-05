@@ -48,6 +48,9 @@ A flat binary can be created from a regular ELF binary using the `objcopy` utili
 objcopy --output-target=binary nd_init.elf nd_init
 ```
 
+The **nd_init** program will be loaded at virtual address `0x10_0000` (16 MiB), and jump to its
+entry point at offset `0x0`.
+
 Depending on how the kernel will be used (i.e. as a command-line server, or as a graphical desktop),
 **nd_init** will have different responsibilities. For example, if the kernel is used as a graphical
 desktop, **nd_init** will start the window manager and the desktop environment.
