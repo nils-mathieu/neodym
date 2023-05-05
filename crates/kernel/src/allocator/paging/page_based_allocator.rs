@@ -1,17 +1,13 @@
 //! The allocator implementation on systems which use paging.
 
 use core::alloc::{AllocError, Allocator, Layout};
-use core::marker::PhantomData;
-use core::mem::ManuallyDrop;
 use core::mem::{size_of, MaybeUninit};
-use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
 
 use nd_spin::Mutex;
 
-/// The size of a single page.
-#[cfg(target_arch = "x86_64")]
-const PAGE_SIZE: usize = 4096;
+use super::PAGE_SIZE;
+use super::{PageBox, PageList};
 
 /// The size of a slot in the buddy allocator.
 const SLOT_SIZE: usize = PAGE_SIZE / usize::BITS as usize;
@@ -183,9 +179,7 @@ impl PageMetaNode {
 
     /// Deallocates a slot.
     ///
-    /// # Errors
-    ///
-    /// This function fails if the block was not allocated in any of the pages managed by this node.
+    /// This function returns the index of the page that contained the allocation, if the page is managed by this node.
     ///
     /// # Safety
     ///
@@ -195,14 +189,26 @@ impl PageMetaNode {
         addr: NonNull<u8>,
         slot_idx: usize,
         slot_count: usize,
-    ) -> Result<(), ()> {
-        let page = self
+    ) -> Option<usize> {
+        let index = self
             .pages
             .iter_mut()
-            .find(move |page| page.includes(addr))
-            .ok_or(())?;
+            .position(move |page| page.includes(addr))?;
+
+        // SAFETY:
+        //  This index comes from `position`.
+        let page = unsafe { self.pages.get_unchecked_mut(index) };
+
+        // SAFETY:
+        //  The caller must make sure that this operation is safe.
         unsafe { page.deallocate_unchecked(slot_idx, slot_count) };
-        Ok(())
+
+        if page.state == 0 {
+            // The page is now empty.
+            unsafe { self.pages.swap_remove_unchecked(index) };
+        }
+
+        Some(index)
     }
 
     /// Attemps to grow a block.
@@ -239,9 +245,94 @@ impl PageMetaNode {
     }
 }
 
+/// Allocates a bunch of contiguous slots.
+///
+/// # Safety
+///
+/// `slot_count` must not exceed `SLOT_COUNT`.
+///
+/// `slot_align` must be between `SLOT_SIZE` and `PAGE_SIZE`.
+unsafe fn allocate_in_list(
+    list: &mut PageList<PageMetaNode>,
+    slot_count: usize,
+    slot_align: usize,
+) -> Result<NonNull<[u8]>, AllocError> {
+    if let Some(ok) = list
+        .iter_mut()
+        .find_map(|node| node.allocate_in_existing(slot_count, slot_align))
+    {
+        return Ok(ok);
+    }
+
+    // We couldn't find a page with enough free slot in the whole list.
+    // We need to find a node with a free slot to store a new page.
+    let mut meta = unsafe { PageMeta::new()? };
+
+    // SAFETY:
+    //  We just created the page, so we know that it's free.
+    let result = unsafe { meta.allocate_at_unchecked(0, slot_count) };
+
+    let mut cur = list.cursor();
+    while let Some(node) = cur.current_mut() {
+        match node.pages.push(meta) {
+            Ok(()) => return Ok(result),
+            Err(err) => meta = err,
+        }
+
+        cur = unsafe { cur.into_next().unwrap_unchecked() };
+    }
+
+    // We couldn't find a node with a free slot to store the new page.
+    // We have to allocate a new node.
+    cur.insert(PageMetaNode::new()).map_err(|_| AllocError)?;
+
+    // SAFETY:
+    //  We know that this list is free, since we just allocated it.
+    unsafe {
+        cur.current_mut()
+            .unwrap_unchecked()
+            .pages
+            .push_unchecked(meta)
+    };
+
+    Ok(result)
+}
+
+/// Deallocates a block from the provided list.
+///
+/// # Safety
+///
+/// The provided address and slot_count must reference an existing block.
+unsafe fn deallocate_in_list(
+    list: &mut PageList<PageMetaNode>,
+    addr: NonNull<u8>,
+    slot_count: usize,
+) {
+    let slot_idx = ((addr.as_ptr() as usize) % PAGE_SIZE) / SLOT_SIZE;
+
+    let mut cur = list.cursor();
+    while let Some(node) = cur.current_mut() {
+        if unsafe {
+            node.deallocate_unchecked(addr, slot_idx, slot_count)
+                .is_some()
+        } {
+            if node.pages.is_empty() {
+                cur.remove();
+            }
+
+            return;
+        }
+
+        cur = unsafe { cur.into_next().unwrap_unchecked() };
+    }
+
+    debug_assert!(false, "did not find the block to deallocate");
+    unsafe { core::hint::unreachable_unchecked() };
+}
+
 /// The inner state of the allocator, when running on **x86_64**.
 pub struct PageBasedAllocator {
-    head: Mutex<Option<PageBox<PageMetaNode>>>,
+    head: Mutex<PageList<PageMetaNode>>,
 }
 
 impl PageBasedAllocator {
@@ -253,7 +344,7 @@ impl PageBasedAllocator {
     #[inline(always)]
     pub const unsafe fn new() -> Self {
         Self {
-            head: Mutex::new(None),
+            head: Mutex::new(PageList::new()),
         }
     }
 }
@@ -274,62 +365,12 @@ unsafe impl Allocator for PageBasedAllocator {
         // The number of slots required to store the allocation.
         let slot_count = (layout.size() + SLOT_SIZE - 1) / SLOT_SIZE;
 
-        let mut lock = self.head.lock();
-        let mut cur: &mut Option<PageBox<PageMetaNode>> = &mut lock;
-
-        while let Some(node) = cur {
-            if let Some(ok) = node.allocate_in_existing(slot_count, slot_align) {
-                return Ok(ok);
-            }
-
-            cur = &mut node.next;
-        }
-
-        // We couldn't find a page with enough free slot in the whole list.
-        // We need to find a node with a free slot to store a new page.
-        let mut meta = unsafe { PageMeta::new()? };
-
-        // SAFETY:
-        //  We just created the page, so we know that it's free.
-        let result = unsafe { meta.allocate_at_unchecked(0, slot_count) };
-
-        cur = &mut lock;
-        while let Some(node) = cur {
-            match node.pages.push(meta) {
-                Ok(()) => {
-                    // We know that this page is free, since we just allocated it.
-                    return Ok(result);
-                }
-                Err(err) => meta = err,
-            }
-        }
-
-        // We couldn't find a node with a free slot to store the new page.
-        // We have to allocate a new node.
-        let new_node = cur.insert(unsafe { PageBox::new(PageMetaNode::new())? });
-
-        // We know that this list is free, since we just allocated it.
-        unsafe { new_node.pages.push_unchecked(meta) };
-
-        Ok(result)
+        unsafe { allocate_in_list(&mut self.head.lock(), slot_count, slot_align) }
     }
 
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
         let slot_count = (layout.size() + SLOT_SIZE - 1) / SLOT_SIZE;
-        let slot_idx = ((ptr.as_ptr() as usize) % PAGE_SIZE) / SLOT_SIZE;
-
-        let mut lock = self.head.lock();
-        let mut cur: &mut Option<PageBox<PageMetaNode>> = &mut lock;
-
-        while let Some(node) = cur {
-            if unsafe { node.deallocate_unchecked(ptr, slot_idx, slot_count).is_ok() } {
-                return;
-            }
-
-            cur = &mut node.next;
-        }
-
-        debug_assert!(false, "did not find the block to deallocate");
+        unsafe { deallocate_in_list(&mut self.head.lock(), ptr, slot_count) };
     }
 
     unsafe fn grow(
@@ -347,44 +388,44 @@ unsafe impl Allocator for PageBasedAllocator {
         let slot_idx = ((ptr.as_ptr() as usize) % PAGE_SIZE) / SLOT_SIZE;
 
         let mut lock = self.head.lock();
-        let mut cur: &mut Option<PageBox<PageMetaNode>> = &mut lock;
+        let mut iter = lock.iter_mut();
+        loop {
+            let Some(node) = iter.next() else {
+                debug_assert!(false, "did not find the block to grow");
+                unsafe { core::hint::unreachable_unchecked() };
+            };
 
-        while let Some(node) = cur {
             match unsafe { node.grow_unchecked(ptr, slot_idx, slot_count, new_slot_count) } {
                 Ok(ok) => return Ok(ok),
                 Err(usize::MAX) => (),
-                Err(page_idx) => {
-                    // We could not grow the allocation in-place. We need a new one.
-
-                    // Create a new allocation.
-                    let new = self.allocate(new_layout)?;
-
-                    // Copy the old allocation to the new one.
-                    unsafe {
-                        core::ptr::copy_nonoverlapping(
-                            ptr.as_ptr(),
-                            new.as_ptr() as *mut u8,
-                            old_layout.size(),
-                        );
-                    }
-
-                    // Deallocate the old allocation.
-                    unsafe {
-                        node.pages
-                            .get_unchecked_mut(page_idx)
-                            .deallocate_unchecked(slot_idx, slot_count);
-                    }
-
-                    return Ok(new);
-                }
+                Err(_) => break,
             }
-
-            cur = &mut node.next;
         }
 
-        // Original block not found.
-        debug_assert!(false, "did not find the block to grow");
-        unsafe { core::hint::unreachable_unchecked() };
+        // We couldn't find the block to grow.
+        // Create a new allocation.
+        let slot_align = if new_layout.align() < 64 {
+            1
+        } else {
+            new_layout.align() / SLOT_SIZE
+        };
+        let new = unsafe { allocate_in_list(&mut lock, new_slot_count, slot_align) }?;
+
+        // Copy the old allocation to the new one.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                ptr.as_ptr(),
+                new.as_ptr() as *mut u8,
+                old_layout.size(),
+            );
+        }
+
+        // Deallocate the old allocation.
+        unsafe {
+            deallocate_in_list(&mut lock, ptr, slot_count);
+        }
+
+        Ok(new)
     }
 
     unsafe fn grow_zeroed(
@@ -405,112 +446,5 @@ unsafe impl Allocator for PageBasedAllocator {
         }
 
         Ok(new_ptr)
-    }
-}
-
-/// A memory page allocated by the global page allocator.
-pub struct PageBox<T: ?Sized> {
-    page: NonNull<T>,
-    _marker: PhantomData<T>,
-}
-
-unsafe impl<T: ?Sized + Send> Send for PageBox<T> {}
-unsafe impl<T: ?Sized + Sync> Sync for PageBox<T> {}
-
-impl<T> PageBox<T> {
-    const _SIZE_CHECK: () = assert!(size_of::<T>() <= PAGE_SIZE);
-
-    /// Allocates a new [`PageBox`] using the global page allocator.
-    ///
-    /// # Safety
-    ///
-    /// The global page allocator must have been initialized.
-    ///
-    /// # Errors
-    ///
-    /// This function fails if the system is out of physical memory.
-    #[inline]
-    pub unsafe fn new(value: T) -> Result<Self, AllocError> {
-        let page = create_box()?.cast::<T>();
-
-        unsafe { page.as_ptr().write(value) };
-
-        Ok(Self {
-            page,
-            _marker: PhantomData,
-        })
-    }
-}
-
-impl<T> PageBox<MaybeUninit<T>> {
-    /// Creates a new [`PageBox`] without initializing it.
-    pub unsafe fn new_uninit() -> Result<Self, AllocError> {
-        let page = create_box()?.cast::<MaybeUninit<T>>();
-
-        Ok(Self {
-            page,
-            _marker: PhantomData,
-        })
-    }
-}
-
-/// Attempts to allocate a new page using the global allocator.
-fn create_box() -> Result<NonNull<u8>, AllocError> {
-    #[cfg(target_arch = "x86_64")]
-    {
-        let allocator = unsafe { crate::arch::x86_64::page_allocator() };
-
-        // SAFETY:
-        //  If the `PageBox` could be created, we know that the page allocator has been
-        //  initialized. This means that we can safely call `page_allocator()`.
-        let addr = allocator.allocate().ok_or(AllocError)?;
-
-        let virt_addr = allocator.physical_to_virtual(addr) as *mut u8;
-
-        unsafe { Ok(NonNull::new_unchecked(virt_addr)) }
-    }
-}
-
-impl<T: ?Sized> PageBox<T> {
-    /// Leaks this [`PageBox`].
-    #[inline(always)]
-    pub fn leak(this: Self) -> &'static mut T {
-        let mut this = ManuallyDrop::new(this);
-        unsafe { this.page.as_mut() }
-    }
-}
-
-impl<T: ?Sized> Deref for PageBox<T> {
-    type Target = T;
-
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target {
-        unsafe { self.page.as_ref() }
-    }
-}
-
-impl<T: ?Sized> DerefMut for PageBox<T> {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { self.page.as_mut() }
-    }
-}
-
-impl<T: ?Sized> Drop for PageBox<T> {
-    #[inline]
-    fn drop(&mut self) {
-        unsafe { core::ptr::drop_in_place(self.page.as_ptr()) };
-
-        #[cfg(target_arch = "x86_64")]
-        unsafe {
-            // SAFETY:
-            //  If the `PageBox` could be created, we know that the page allocator has been
-            //  initialized. This means that we can safely call `page_allocator()`.
-            let page_allocator = crate::arch::x86_64::page_allocator();
-
-            let phys_addr =
-                page_allocator.virtual_to_physical(self.page.as_ptr() as *const () as usize as u64);
-            crate::arch::x86_64::page_allocator().deallocate(phys_addr);
-        }
     }
 }
