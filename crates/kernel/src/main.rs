@@ -19,7 +19,9 @@
 #![feature(used_with_arg)]
 #![feature(abi_x86_interrupt)]
 #![feature(panic_info_message)]
+#![feature(allocator_api)]
 
+mod allocator;
 mod arch;
 mod boot;
 mod init;
