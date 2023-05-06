@@ -1,7 +1,5 @@
 use nd_x86_64::{PageTable, PageTableEntry, PageTableFlags, PhysAddr, VirtAddr};
 
-use crate::arch::x86_64::PageAllocator;
-
 use super::OutOfPhysicalMemory;
 
 /// Represents a specific map of the memory.
@@ -152,6 +150,47 @@ impl<M: MemoryMap> MemoryMapper<M> {
 
 impl<M: MemoryMap> Drop for MemoryMapper<M> {
     fn drop(&mut self) {
-        todo!();
+        let page_allocator = unsafe { crate::arch::x86_64::page_allocator() };
+
+        unsafe fn deallocate_recursive<M: MemoryMap>(
+            mapper: &M,
+            page_table: &PageTable,
+            page_allocator: &crate::arch::x86_64::paging::PageAllocator,
+            level: u32,
+        ) {
+            if level == 0 {
+                return;
+            }
+
+            for &entry in &page_table.0 {
+                if entry == PageTableEntry::UNUSED {
+                    continue;
+                }
+
+                let table = unsafe {
+                    &*(mapper.physical_to_virtual(entry.addr()).unwrap_unchecked()
+                        as *mut PageTable)
+                };
+
+                unsafe { deallocate_recursive(mapper, table, page_allocator, level - 1) }
+            }
+
+            let phys_addr = unsafe {
+                mapper
+                    .virtual_to_physical(page_table as *const _ as usize as VirtAddr)
+                    .unwrap_unchecked()
+            };
+
+            unsafe { page_allocator.deallocate(phys_addr) };
+        }
+
+        let l4_table = unsafe {
+            &*(self
+                .mapper
+                .physical_to_virtual(self.l4_table)
+                .unwrap_unchecked() as *mut PageTable)
+        };
+
+        unsafe { deallocate_recursive(&self.mapper, l4_table, page_allocator, 3) }
     }
 }
