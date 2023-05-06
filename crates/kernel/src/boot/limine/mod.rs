@@ -6,7 +6,7 @@ use nd_limine::{
     BootloaderInfo, EntryPoint, File, Hhdm, MemMapEntryType, MemoryMap, Module, Request,
 };
 
-use crate::arch::x86_64::MemorySegment;
+use crate::arch::x86_64::{MemorySegment, OutOfPhysicalMemory};
 
 /// Requests the bootloader to provide information about itself, such as its name and version.
 /// Those information will be logged at startup.
@@ -127,7 +127,13 @@ extern "C" fn entry_point() -> ! {
         nd_x86_64::sti();
     }
 
-    crate::process::load_init_program(nd_init.data());
+    match unsafe { crate::process::load_init_program(nd_init.data()) } {
+        Ok(()) => (),
+        Err(OutOfPhysicalMemory) => {
+            nd_log::error!("Failed to load the initial program: The system is out of memory.");
+            crate::arch::die();
+        }
+    }
 
     todo!("Start the scheduler here.");
 }

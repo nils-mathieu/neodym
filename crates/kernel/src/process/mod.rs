@@ -3,9 +3,17 @@ mod init;
 pub use self::init::*;
 
 /// Represents a process running on the system.
-pub struct Process {}
+pub struct Process {
+    /// The architecture-specific part of the process.
+    #[cfg(target_arch = "x86_64")]
+    x86_64: crate::arch::x86_64::Process,
+}
 
 /// Spawns a new process.
-pub fn spawn(process: Process) {
-    unimplemented!();
+///
+/// # Safety
+///
+/// The global process scheduler must have been initialized previously.
+pub unsafe fn spawn(_state: Process) {
+    todo!();
 }

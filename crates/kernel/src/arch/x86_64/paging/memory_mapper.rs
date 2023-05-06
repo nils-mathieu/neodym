@@ -7,7 +7,17 @@ use crate::allocator::paging::PageBox;
 use super::OutOfPhysicalMemory;
 
 /// Represents a leaf entry in a page table.
-pub struct MemoryMapperEntry<'a>(&'a mut PageTableEntry);
+#[repr(transparent)]
+pub struct MemoryMapperEntry(PageTableEntry);
+
+impl MemoryMapperEntry {
+    /// Returns the virtual address of the page within the kernel address space.
+    #[inline]
+    pub fn kernel_virtual_address(&mut self) -> VirtAddr {
+        let page_allocator = unsafe { crate::arch::x86_64::page_allocator() };
+        page_allocator.physical_to_virtual(self.0.addr())
+    }
+}
 
 /// A page table that owns the memory pages of its entries.
 #[repr(transparent)]
@@ -45,15 +55,10 @@ impl MemoryMapper {
     /// Returns an entry within the whole page table.
     ///
     /// If the entry does not exist yet, it is created automatically.
-    ///
-    /// # Safety
-    ///
-    /// `address_space` must accurately return the virtual address associated with the given
-    /// physical address.
-    pub unsafe fn entry(
+    pub fn entry(
         &mut self,
         virtual_address: VirtAddr,
-    ) -> Result<MemoryMapperEntry, OutOfPhysicalMemory> {
+    ) -> Result<&mut MemoryMapperEntry, OutOfPhysicalMemory> {
         // Those are the flags that we'll give to non-leaf entries.
         let parent_flags =
             PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;

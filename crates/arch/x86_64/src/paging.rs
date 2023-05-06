@@ -67,6 +67,18 @@ impl PageTableEntry {
         Self(addr | flags.bits())
     }
 
+    /// Returns the raw value of this entry.
+    #[inline(always)]
+    pub const fn to_raw(self) -> u64 {
+        self.0
+    }
+
+    /// Creates a new [`PageTableEntry`] from a raw value.
+    #[inline(always)]
+    pub const fn from_raw(val: u64) -> Self {
+        Self(val)
+    }
+
     /// Returns the physical address specified by this entry.
     #[inline(always)]
     pub const fn addr(self) -> PhysAddr {
