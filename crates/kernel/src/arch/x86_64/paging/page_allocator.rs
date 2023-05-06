@@ -1,3 +1,4 @@
+use core::alloc::AllocError;
 use core::fmt;
 use core::mem::{size_of, MaybeUninit};
 use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
@@ -6,6 +7,19 @@ use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize};
 use nd_array::Vec;
 use nd_spin::Mutex;
 use nd_x86_64::{PhysAddr, VirtAddr};
+
+use super::{MemoryMap, OffsetMapping};
+
+/// The system is out of available physical memory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OutOfPhysicalMemory;
+
+impl From<OutOfPhysicalMemory> for AllocError {
+    #[inline(always)]
+    fn from(_: OutOfPhysicalMemory) -> Self {
+        AllocError
+    }
+}
 
 /// A memory segment that is useable by the kernel.
 #[derive(Debug, Clone, Copy)]
@@ -63,23 +77,19 @@ pub struct PageAllocator {
     ///
     /// The higher half direct map is a direct mapping of the physical memory at the top of the
     /// address space.
-    higher_half_direct_map: VirtAddr,
+    higher_half_direct_map: OffsetMapping,
 }
 
 impl PageAllocator {
     /// The maximum number of segments that can be managed by the page allocator.
     pub const MAX_SEGMENT_COUNT: usize = 16;
 
-    /// Converts a virtual address to a physical address.
+    /// Returns the memory map used by the allocator.
+    ///
+    /// This is supposed to be whole kernel's memory map.
     #[inline(always)]
-    pub fn virtual_to_physical(&self, virt: VirtAddr) -> PhysAddr {
-        virt - self.higher_half_direct_map
-    }
-
-    /// Converts a physical address to a virtual address.
-    #[inline(always)]
-    pub fn physical_to_virtual(&self, phys: PhysAddr) -> VirtAddr {
-        phys + self.higher_half_direct_map
+    pub fn memory_map(&self) -> &impl MemoryMap {
+        &self.higher_half_direct_map
     }
 
     /// Allocates a new physical page.
@@ -87,7 +97,7 @@ impl PageAllocator {
     /// The returned physical address is guaranteed to be page-aligned.
     ///
     /// Note that you can return the page to the allocator by calling [`PageAllocator::deallocate`].
-    pub fn allocate(&self) -> Option<PhysAddr> {
+    pub fn allocate(&self) -> Result<PhysAddr, OutOfPhysicalMemory> {
         // First, attempt to find a page in the free list.
         let mut cur = &self.free_pages;
 
@@ -101,7 +111,7 @@ impl PageAllocator {
             //  once a page is empty (and `pages.pop()` fails), it remains in the linked list.
             //  I'm not sure how to safely remove it from the list without a lock.
             if let Some(page) = node.pages.try_lock().and_then(|mut pages| pages.pop()) {
-                return Some(page);
+                return Ok(page);
             }
 
             cur = &node.next;
@@ -130,7 +140,7 @@ impl PageAllocator {
 
             if page_index >= page_count {
                 // We font the right segment!
-                return Some(segment.base + page_index * 4096);
+                return Ok(segment.base + page_index * 4096);
             }
 
             page_index -= page_count;
@@ -149,7 +159,7 @@ impl PageAllocator {
         self.next_free.store(page_index as usize, Relaxed);
 
         // We're out of memory :(
-        None
+        Err(OutOfPhysicalMemory)
     }
 
     /// Deallocates a physical address.
@@ -175,7 +185,13 @@ impl PageAllocator {
 
         // We got to the end of the free list, and we didn't find a node that can store our
         // new page. We need to allocate a new node. We'll use the deallocated node for this.
-        let page_node_ptr = self.physical_to_virtual(addr) as *mut FreePageListNode;
+        let page_node_ptr = unsafe {
+            // SAFETY:
+            //  This can never fail as the caller must ensure to provide a valid address.
+            self.higher_half_direct_map
+                .physical_to_virtual(addr)
+                .unwrap_unchecked() as *mut FreePageListNode
+        };
 
         unsafe { page_node_ptr.write(FreePageListNode::new()) };
 
@@ -336,7 +352,7 @@ pub unsafe fn initialize_page_allocator(
             segments,
             next_free: AtomicUsize::new(0),
             free_pages: AtomicPtr::new(core::ptr::null_mut()),
-            higher_half_direct_map: hhdr,
+            higher_half_direct_map: OffsetMapping::new(hhdr),
         });
     }
 

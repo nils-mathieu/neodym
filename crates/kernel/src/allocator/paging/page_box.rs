@@ -1,10 +1,11 @@
 use core::alloc::AllocError;
 use core::marker::PhantomData;
 use core::mem::size_of;
-use core::mem::ManuallyDrop;
-use core::mem::MaybeUninit;
+use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
+
+use crate::arch::x86_64::MemoryMap;
 
 use super::PAGE_SIZE;
 
@@ -74,9 +75,16 @@ fn create_box() -> Result<NonNull<u8>, AllocError> {
         // SAFETY:
         //  If the `PageBox` could be created, we know that the page allocator has been
         //  initialized. This means that we can safely call `page_allocator()`.
-        let addr = allocator.allocate().ok_or(AllocError)?;
+        let addr = allocator.allocate()?;
 
-        let virt_addr = allocator.physical_to_virtual(addr) as *mut u8;
+        // SAFETY:
+        //  We know that the page allocator has provided a valid physical address.
+        let virt_addr = unsafe {
+            allocator
+                .memory_map()
+                .physical_to_virtual(addr)
+                .unwrap_unchecked() as *mut u8
+        };
 
         unsafe { Ok(NonNull::new_unchecked(virt_addr)) }
     }
@@ -117,7 +125,14 @@ unsafe fn destroy_box(page: NonNull<u8>) {
         //  initialized. This means that we can safely call `page_allocator()`.
         let page_allocator = crate::arch::x86_64::page_allocator();
 
-        let phys_addr = page_allocator.virtual_to_physical(page.as_ptr() as usize as u64);
+        // SAFETY:
+        //  We know that we kept a valid virtual address to the page, so we can safely convert it
+        //  back to a physical address.
+        let phys_addr = page_allocator
+            .memory_map()
+            .virtual_to_physical(page.as_ptr() as usize as u64)
+            .unwrap_unchecked();
+
         crate::arch::x86_64::page_allocator().deallocate(phys_addr);
     }
 }
