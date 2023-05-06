@@ -158,21 +158,19 @@ impl<M: MemoryMap> Drop for MemoryMapper<M> {
             page_allocator: &crate::arch::x86_64::paging::PageAllocator,
             level: u32,
         ) {
-            if level == 0 {
-                return;
-            }
+            if level != 0 {
+                for &entry in &page_table.0 {
+                    if entry == PageTableEntry::UNUSED {
+                        continue;
+                    }
 
-            for &entry in &page_table.0 {
-                if entry == PageTableEntry::UNUSED {
-                    continue;
+                    let table = unsafe {
+                        &*(mapper.physical_to_virtual(entry.addr()).unwrap_unchecked()
+                            as *mut PageTable)
+                    };
+
+                    unsafe { deallocate_recursive(mapper, table, page_allocator, level - 1) }
                 }
-
-                let table = unsafe {
-                    &*(mapper.physical_to_virtual(entry.addr()).unwrap_unchecked()
-                        as *mut PageTable)
-                };
-
-                unsafe { deallocate_recursive(mapper, table, page_allocator, level - 1) }
             }
 
             let phys_addr = unsafe {
