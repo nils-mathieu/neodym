@@ -8,8 +8,6 @@ use nd_array::Vec;
 use nd_spin::Mutex;
 use nd_x86_64::{PhysAddr, VirtAddr};
 
-use super::{MemoryMap, OffsetMapping};
-
 /// The system is out of available physical memory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OutOfPhysicalMemory;
@@ -77,19 +75,28 @@ pub struct PageAllocator {
     ///
     /// The higher half direct map is a direct mapping of the physical memory at the top of the
     /// address space.
-    higher_half_direct_map: OffsetMapping,
+    higher_half_direct_map: VirtAddr,
 }
 
 impl PageAllocator {
     /// The maximum number of segments that can be managed by the page allocator.
     pub const MAX_SEGMENT_COUNT: usize = 16;
 
-    /// Returns the memory map used by the allocator.
+    /// Converts a virtual address to a physical address.
     ///
-    /// This is supposed to be whole kernel's memory map.
+    /// # Correctness
+    ///
+    /// This function assumes that the provided virtual address is part of the higher half direct
+    /// map.
     #[inline(always)]
-    pub fn memory_map(&self) -> &impl MemoryMap {
-        &self.higher_half_direct_map
+    pub fn virtual_to_physical(&self, virt: VirtAddr) -> PhysAddr {
+        virt - self.higher_half_direct_map
+    }
+
+    /// Converts a physical address to a virtual address.
+    #[inline(always)]
+    pub fn physical_to_virtual(&self, phys: PhysAddr) -> VirtAddr {
+        phys + self.higher_half_direct_map
     }
 
     /// Allocates a new physical page.
@@ -185,13 +192,7 @@ impl PageAllocator {
 
         // We got to the end of the free list, and we didn't find a node that can store our
         // new page. We need to allocate a new node. We'll use the deallocated node for this.
-        let page_node_ptr = unsafe {
-            // SAFETY:
-            //  This can never fail as the caller must ensure to provide a valid address.
-            self.higher_half_direct_map
-                .physical_to_virtual(addr)
-                .unwrap_unchecked() as *mut FreePageListNode
-        };
+        let page_node_ptr = self.physical_to_virtual(addr) as *mut FreePageListNode;
 
         unsafe { page_node_ptr.write(FreePageListNode::new()) };
 
@@ -299,10 +300,10 @@ pub unsafe fn page_allocator() -> &'static PageAllocator {
 /// Also, after this function has been called, the page tables will be logically owned by the
 /// page allocator. Accessing it outside of the module will trigger undefined behavior.
 ///
-/// A higher-half direct map must be set up at `hhdr`.
+/// A higher-half direct map must be set up at `hhdm`.
 pub unsafe fn initialize_page_allocator(
     usable: &mut dyn Iterator<Item = MemorySegment>,
-    hhdr: VirtAddr,
+    hhdm: VirtAddr,
 ) {
     #[cfg(debug_assertions)]
     assert!(
@@ -352,7 +353,7 @@ pub unsafe fn initialize_page_allocator(
             segments,
             next_free: AtomicUsize::new(0),
             free_pages: AtomicPtr::new(core::ptr::null_mut()),
-            higher_half_direct_map: OffsetMapping::new(hhdr),
+            higher_half_direct_map: hhdm,
         });
     }
 

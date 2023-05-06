@@ -5,13 +5,15 @@ use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
 
-use crate::arch::x86_64::MemoryMap;
+use crate::arch::x86_64::OutOfPhysicalMemory;
 
 use super::PAGE_SIZE;
 
 /// A memory page allocated by the global page allocator.
 pub struct PageBox<T: ?Sized> {
     page: NonNull<T>,
+
+    /// This is used by the dropchecker to understand that we will drop a `T`.
     _marker: PhantomData<T>,
 }
 
@@ -32,12 +34,36 @@ impl<T> PageBox<T> {
     /// This function fails if the system is out of physical memory.
     #[inline]
     pub unsafe fn new(value: T) -> Result<Self, T> {
-        let page = match create_box() {
+        let page = match unsafe { create_box() } {
             Ok(p) => p.cast::<T>(),
             Err(_) => return Err(value),
         };
 
         unsafe { page.as_ptr().write(value) };
+
+        Ok(Self {
+            page,
+            _marker: PhantomData,
+        })
+    }
+
+    /// Allocates a new [`PageBox`], initializing it with zeros.
+    ///
+    /// # Safety
+    ///
+    /// The global page allocator must have been initialized.
+    ///
+    /// The all-zeros bit pattern must be valid for type type `T`.
+    ///
+    /// # Errors
+    ///
+    /// This function fails if the system is out of physical memory.
+    pub unsafe fn zeroed() -> Result<Self, OutOfPhysicalMemory> {
+        let page = unsafe { create_box()? }.cast::<T>();
+
+        unsafe {
+            core::ptr::write_bytes(page.as_ptr(), 0, 1);
+        }
 
         Ok(Self {
             page,
@@ -57,7 +83,7 @@ impl<T> PageBox<T> {
 impl<T> PageBox<MaybeUninit<T>> {
     /// Creates a new [`PageBox`] without initializing it.
     pub unsafe fn new_uninit() -> Result<Self, AllocError> {
-        let page = create_box()?.cast::<MaybeUninit<T>>();
+        let page = unsafe { create_box()? }.cast::<MaybeUninit<T>>();
 
         Ok(Self {
             page,
@@ -67,7 +93,11 @@ impl<T> PageBox<MaybeUninit<T>> {
 }
 
 /// Attempts to allocate a new page using the global allocator.
-fn create_box() -> Result<NonNull<u8>, AllocError> {
+///
+/// # Safety
+///
+/// The global allocator must have been initialized.
+unsafe fn create_box() -> Result<NonNull<u8>, OutOfPhysicalMemory> {
     #[cfg(target_arch = "x86_64")]
     {
         let allocator = unsafe { crate::arch::x86_64::page_allocator() };
@@ -79,12 +109,7 @@ fn create_box() -> Result<NonNull<u8>, AllocError> {
 
         // SAFETY:
         //  We know that the page allocator has provided a valid physical address.
-        let virt_addr = unsafe {
-            allocator
-                .memory_map()
-                .physical_to_virtual(addr)
-                .unwrap_unchecked() as *mut u8
-        };
+        let virt_addr = allocator.physical_to_virtual(addr) as *mut u8;
 
         unsafe { Ok(NonNull::new_unchecked(virt_addr)) }
     }
@@ -128,10 +153,7 @@ unsafe fn destroy_box(page: NonNull<u8>) {
         // SAFETY:
         //  We know that we kept a valid virtual address to the page, so we can safely convert it
         //  back to a physical address.
-        let phys_addr = page_allocator
-            .memory_map()
-            .virtual_to_physical(page.as_ptr() as usize as u64)
-            .unwrap_unchecked();
+        let phys_addr = page_allocator.virtual_to_physical(page.as_ptr() as usize as u64);
 
         crate::arch::x86_64::page_allocator().deallocate(phys_addr);
     }
