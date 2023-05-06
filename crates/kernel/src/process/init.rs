@@ -34,10 +34,24 @@ pub unsafe fn load_init_program(file: &[u8]) -> Result<(), OutOfPhysicalMemory> 
 
     #[cfg(target_arch = "x86_64")]
     {
+        use nd_x86_64::{PageTableFlags, VirtAddr};
+
+        use crate::arch::x86_64::MappingError;
+
+        let flags =
+            PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE;
+
         let mut remainder = file;
-        let mut page_addr = LOAD_ADDRESS as nd_x86_64::VirtAddr;
+        let mut page_addr = LOAD_ADDRESS as VirtAddr;
         while !remainder.is_empty() {
-            let entry = init.x86_64.memory_mapper.entry(page_addr)?;
+            let entry = match init.x86_64.memory_mapper.create_mapping(page_addr, flags) {
+                Ok(entry) => entry,
+                Err(MappingError::AlreadyMapped(_)) => {
+                    debug_assert!(false, "unreachable: this page should not be mapped");
+                    unsafe { core::hint::unreachable_unchecked() };
+                }
+                Err(MappingError::OutOfPhysicalMemory) => return Err(OutOfPhysicalMemory),
+            };
 
             let page = entry.kernel_virtual_address() as *mut u8;
 

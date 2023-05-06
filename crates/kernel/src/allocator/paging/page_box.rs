@@ -1,6 +1,6 @@
 use core::alloc::AllocError;
 use core::marker::PhantomData;
-use core::mem::size_of;
+use core::mem::{align_of, size_of};
 use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
@@ -22,6 +22,7 @@ unsafe impl<T: ?Sized + Sync> Sync for PageBox<T> {}
 
 impl<T> PageBox<T> {
     const _SIZE_CHECK: () = assert!(size_of::<T>() <= PAGE_SIZE);
+    const _ALIGN_CHECK: () = assert!(align_of::<T>() % PAGE_SIZE == 0);
 
     /// Allocates a new [`PageBox`] using the global page allocator.
     ///
@@ -40,30 +41,6 @@ impl<T> PageBox<T> {
         };
 
         unsafe { page.as_ptr().write(value) };
-
-        Ok(Self {
-            page,
-            _marker: PhantomData,
-        })
-    }
-
-    /// Allocates a new [`PageBox`], initializing it with zeros.
-    ///
-    /// # Safety
-    ///
-    /// The global page allocator must have been initialized.
-    ///
-    /// The all-zeros bit pattern must be valid for type type `T`.
-    ///
-    /// # Errors
-    ///
-    /// This function fails if the system is out of physical memory.
-    pub unsafe fn zeroed() -> Result<Self, OutOfPhysicalMemory> {
-        let page = unsafe { create_box()? }.cast::<T>();
-
-        unsafe {
-            core::ptr::write_bytes(page.as_ptr(), 0, 1);
-        }
 
         Ok(Self {
             page,

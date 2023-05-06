@@ -147,19 +147,17 @@ impl PageMeta {
 
 /// A node in the linked list.
 struct PageMetaNode {
-    next: Option<PageBox<PageMetaNode>>,
     pages: nd_array::Vec<PageMeta, { PageMetaNode::MAX_META_COUNT }>,
 }
 
 impl PageMetaNode {
     /// The number of [`PageMeta`] that can be stored in a single [`PageMetaNode`].
-    pub const MAX_META_COUNT: usize = (PAGE_SIZE - size_of::<usize>() * 2) / size_of::<PageMeta>();
+    pub const MAX_META_COUNT: usize = PAGE_SIZE / size_of::<PageMeta>();
 
     /// Creates a new [`PageMetaNode`].
     #[inline(always)]
     pub const fn new() -> Self {
         Self {
-            next: None,
             pages: nd_array::Vec::new(),
         }
     }

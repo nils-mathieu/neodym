@@ -127,6 +127,10 @@ extern "C" fn entry_point() -> ! {
         nd_x86_64::sti();
     }
 
+    unsafe {
+        crate::allocator::initialize_allocator();
+    }
+
     match unsafe { crate::process::load_init_program(nd_init.data()) } {
         Ok(()) => (),
         Err(OutOfPhysicalMemory) => {
