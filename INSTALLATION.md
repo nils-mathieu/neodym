@@ -75,7 +75,7 @@ iso_root/
 `limine-cd-efi.bin`, `limine-cd.bin` and `limine-sys.bin` are all present in the `limine-repos`
 directory created earlier.
 
-`limine.cfg` is the configuration file of Limine. If you want to multiboot Neodym without another
+`limine.cfg` is the configuration file of Limine. If you want to multiboot Neodym alongside another
 operating system, you can use this configuration file.
 
 Here is an example `limine.cfg` configuration that works with the above directory structure:
