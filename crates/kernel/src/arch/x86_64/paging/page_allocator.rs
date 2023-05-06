@@ -145,7 +145,7 @@ impl PageAllocator {
         for segment in &self.segments {
             let page_count = segment.length / 4096;
 
-            if page_index >= page_count {
+            if page_index < page_count {
                 // We font the right segment!
                 return Ok(segment.base + page_index * 4096);
             }
