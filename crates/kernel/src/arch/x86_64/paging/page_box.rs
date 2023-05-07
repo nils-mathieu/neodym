@@ -1,7 +1,6 @@
-use core::alloc::AllocError;
 use core::marker::PhantomData;
+use core::mem::ManuallyDrop;
 use core::mem::{align_of, size_of};
-use core::mem::{ManuallyDrop, MaybeUninit};
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
 
@@ -53,19 +52,6 @@ impl<T> PageBox<T> {
         let ret = unsafe { core::ptr::read(this.page.as_ptr()) };
         unsafe { destroy_box(this.page_allocator, this.page.cast()) };
         ret
-    }
-}
-
-impl<T> PageBox<MaybeUninit<T>> {
-    /// Creates a new [`PageBox`] without initializing it.
-    pub fn new_uninit(page_allocator: PageAllocatorTok) -> Result<Self, AllocError> {
-        let page = unsafe { create_box(page_allocator)? }.cast::<MaybeUninit<T>>();
-
-        Ok(Self {
-            page,
-            _marker: PhantomData,
-            page_allocator,
-        })
     }
 }
 

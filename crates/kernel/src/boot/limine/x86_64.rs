@@ -3,11 +3,11 @@
 //! See [`entry_point`].
 
 use nd_limine::MemMapEntryType;
-use nd_x86_64::VirtAddr;
+use nd_x86_64::{PageTableFlags, VirtAddr};
 
 use crate::arch::x86_64::{
-    KernelInfo, KernelInfoTok, MemoryMapper, MemorySegment, OutOfPhysicalMemory, PageAllocatorTok,
-    Process,
+    KernelInfo, KernelInfoTok, MappingError, MemoryMapper, MemorySegment, OutOfPhysicalMemory,
+    PageAllocatorTok, Process,
 };
 
 use super::find_init_program;
@@ -67,23 +67,15 @@ pub extern "C" fn entry_point() -> ! {
             length: e.length(),
         });
 
-    for entry in memmap.entries() {
-        nd_log::trace!(
-            "Memory segment: {:#x} - {:#x} ({:?})",
-            entry.base(),
-            entry.base() + entry.length(),
-            entry.ty()
-        );
-    }
-
     let page_allocator = unsafe {
         // Initialize some global systems required by the kernel's system and some interrupt
         // handlers, such as the page allocator, local APICs, etc.
         //
         // When we have support for multiple CPUs, initialization code will come here.
         let info = KernelInfoTok::initialize(KernelInfo {
-            kernel_addr: kernel_addr.physical_base(),
-            kernel_size: 0,
+            kernel_phys_addr: kernel_addr.physical_base(),
+            kernel_virt_addr: kernel_addr.virtual_base(),
+            kernel_size: crate::image_size(),
             hhdm_offset: hhdm.offset(),
         });
 
@@ -111,10 +103,52 @@ fn spawn_nd_init(page_allocator: PageAllocatorTok, data: &[u8]) -> Result<(), Ou
     // Start the initial program! This is the end of the boot process.
     const LOADED_AT: VirtAddr = 0x10_0000;
 
+    nd_log::trace!("Loading the `nd_init` program...");
+
     let mut process = Process {
         instruction_pointer: LOADED_AT,
         memory_mapper: MemoryMapper::new(page_allocator)?,
     };
+
+    // Map the process itself into its address space.
+
+    let mut remainder = data;
+    let mut virt_addr = LOADED_AT;
+
+    while !remainder.is_empty() {
+        let to_copy = core::cmp::min(0x1000, remainder.len());
+
+        match process.memory_mapper.allocate_mapping(
+            virt_addr,
+            PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT,
+        ) {
+            Ok(page) => {
+                // Copy the memory into the process's address space.
+                unsafe {
+                    core::ptr::copy_nonoverlapping(
+                        remainder.as_ptr(),
+                        page.kernel_virtual_address() as usize as *mut u8,
+                        to_copy,
+                    );
+                }
+            }
+            Err(MappingError::OutOfPhysicalMemory) => return Err(OutOfPhysicalMemory),
+            Err(MappingError::AlreadyMapped(_)) => {
+                debug_assert!(false, "nothing should be mapped here...");
+                unsafe { core::hint::unreachable_unchecked() };
+            }
+        }
+
+        // SAFETY:
+        //  `to_copy` has been constructed such that is is always smaller or equal to the
+        //  length of `remainder`.
+        remainder = unsafe { remainder.get_unchecked(to_copy..) };
+        virt_addr += 0x1000;
+    }
+
+    nd_log::info!("Passing control to the `nd_init` program...");
+
+    crate::arch::x86_64::spawn(process)?;
 
     Ok(())
 }

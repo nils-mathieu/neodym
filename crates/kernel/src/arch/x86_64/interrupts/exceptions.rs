@@ -1,7 +1,10 @@
 use nd_x86_64::{InterruptStackFrame, PageFaultError, TableEntryError};
 
-pub extern "x86-interrupt" fn double_fault(_: InterruptStackFrame, _: u64) -> ! {
-    panic!("Double Fault {:x}", nd_x86_64::rsp());
+pub extern "x86-interrupt" fn double_fault(frame: InterruptStackFrame, code: u64) -> ! {
+    nd_log::trace!("Double Fault (code = {})", code);
+    nd_log::trace!(" > RIP = {:#x}", frame.instruction_pointer());
+    nd_log::trace!(" > RSP = {:#x}", frame.stack_pointer());
+    panic!("Double Fault");
 }
 
 pub extern "x86-interrupt" fn invalid_op_code(frame: InterruptStackFrame) {

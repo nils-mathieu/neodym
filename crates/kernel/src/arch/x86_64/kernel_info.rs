@@ -12,7 +12,9 @@ pub struct KernelInfo {
     /// The number of bytes that the kernel takes, in memory.
     pub kernel_size: usize,
     /// The starting physical address of the kernel in physical memory.
-    pub kernel_addr: PhysAddr,
+    pub kernel_phys_addr: PhysAddr,
+    /// The virtual address of the kernel.
+    pub kernel_virt_addr: VirtAddr,
 }
 
 static mut KERNEL_INFO: MaybeUninit<KernelInfo> = MaybeUninit::uninit();

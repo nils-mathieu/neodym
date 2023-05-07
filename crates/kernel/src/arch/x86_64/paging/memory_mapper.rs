@@ -1,3 +1,5 @@
+use core::ops::{Deref, DerefMut};
+
 use nd_x86_64::{Cr3, Cr3Flags, PageTable, PageTableEntry, PageTableFlags, PhysAddr, VirtAddr};
 
 use super::{OutOfPhysicalMemory, PageAllocatorTok};
@@ -39,6 +41,22 @@ impl MemoryMapperEntry {
     }
 }
 
+impl Deref for MemoryMapperEntry {
+    type Target = PageTableEntry;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.entry
+    }
+}
+
+impl DerefMut for MemoryMapperEntry {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.entry
+    }
+}
+
 /// The flag that we're using to determine whether a given page should be deallocate when a
 /// [`MemoryMapper`] is dropped.
 const OWNED: PageTableFlags = PageTableFlags::USER_0;
@@ -46,14 +64,6 @@ const OWNED: PageTableFlags = PageTableFlags::USER_0;
 /// Allocates automatically page tables for custom mappings.
 ///
 /// This is used to manage the memory mapping of processes.
-///
-/// # Higher Half Direct Map
-///
-/// The higher half direct map is mapped in every address space at the same address. This means
-/// that the kernel address space is the same for every process.
-///
-/// However, this direct mapping is only accessible from the kernel. Those pages are not accessible
-/// from ring 3.
 ///
 /// # Conditional Ownership
 ///
@@ -105,7 +115,7 @@ impl MemoryMapper {
     pub fn entry(
         &mut self,
         virtual_address: VirtAddr,
-    ) -> Result<&mut PageTableEntry, OutOfPhysicalMemory> {
+    ) -> Result<&mut MemoryMapperEntry, OutOfPhysicalMemory> {
         let hhdm = self.page_allocator.kernel_info().hhdm_offset;
 
         // Those are the flags that we'll give to non-leaf entries.
@@ -142,11 +152,32 @@ impl MemoryMapper {
             };
         }
 
-        Ok(unsafe { table.0.get_unchecked_mut(l1_idx as usize) })
+        Ok(MemoryMapperEntry::new_mut(unsafe {
+            table.0.get_unchecked_mut(l1_idx as usize)
+        }))
     }
 
     /// Creates a new mapping for the provided virtual address.
+    ///
+    /// This function does not allocate any physical page for the final mapping.
     pub fn create_mapping(
+        &mut self,
+        virt: VirtAddr,
+        phys: PhysAddr,
+        flags: PageTableFlags,
+    ) -> Result<&mut MemoryMapperEntry, MappingError> {
+        let entry = self.entry(virt)?;
+        if **entry != PageTableEntry::UNUSED {
+            return Err(MappingError::AlreadyMapped(entry.addr()));
+        }
+
+        **entry = PageTableEntry::new(phys, flags);
+
+        Ok(entry)
+    }
+
+    /// Creates a new mapping for the provided virtual address.
+    pub fn allocate_mapping(
         &mut self,
         virt: VirtAddr,
         flags: PageTableFlags,
@@ -154,14 +185,35 @@ impl MemoryMapper {
         let page_allocator = self.page_allocator;
 
         let entry = self.entry(virt)?;
-
-        if *entry != PageTableEntry::UNUSED {
+        if **entry != PageTableEntry::UNUSED {
             return Err(MappingError::AlreadyMapped(entry.addr()));
         }
 
-        *entry = PageTableEntry::new(page_allocator.allocate()?, flags);
+        **entry = PageTableEntry::new(page_allocator.allocate()?, flags | OWNED);
 
-        Ok(MemoryMapperEntry::new_mut(entry))
+        Ok(entry)
+    }
+
+    /// Maps the kernel into this address space.
+    pub fn map_kernel(&mut self) -> Result<(), MappingError> {
+        let info = self.page_allocator.kernel_info();
+
+        let mut phys_addr = info.kernel_phys_addr;
+        let mut virt_addr = info.kernel_virt_addr;
+        let mut remainder = info.kernel_size;
+
+        while remainder > 0 {
+            let size = core::cmp::min(remainder, super::PAGE_SIZE);
+            let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+
+            self.create_mapping(virt_addr, phys_addr, flags)?;
+
+            phys_addr += size as u64;
+            virt_addr += size as u64;
+            remainder -= size;
+        }
+
+        Ok(())
     }
 }
 
