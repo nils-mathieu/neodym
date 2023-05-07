@@ -57,6 +57,34 @@ impl<T, const N: usize> Vec<T, N> {
         self.data.as_mut_ptr() as *mut T
     }
 
+    /// Returns the part of the vector that's allocated, but not yet initialized.
+    #[inline(always)]
+    pub fn spare_capacity_mut(&mut self) -> &mut [MaybeUninit<T>] {
+        unsafe { self.data.get_unchecked_mut(self.len..) }
+    }
+
+    /// Sets the length of the vector independently of its contents.
+    ///
+    /// # Notes
+    ///
+    /// 1. Setting the length to a lower value might leak memory as it forgets the elements
+    ///    that are no longer part of the vector.
+    ///
+    /// 2. Setting the length to a higher value can cause undefined behavior as it assumes its
+    ///    elements are initialized.
+    ///
+    /// # Safety
+    ///
+    /// * `new_len` must be less than or equal to `N`.
+    ///
+    /// * Every element of the vector from index 0 up to `new_len` (exclusive) must be
+    ///   initialized.
+    #[inline(always)]
+    pub unsafe fn set_len(&mut self, new_len: usize) {
+        debug_assert!(new_len <= N);
+        self.len = new_len;
+    }
+
     /// Attempts to push a new value into the vector.
     ///
     /// This function returns its input in case the vector is full.
