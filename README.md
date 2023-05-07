@@ -7,6 +7,10 @@ This repository is home of the Neodym Operating System. Neodym is an experimenta
 
 Nothing to see yet! The project is still in its early stages of development.
 
+We're starting userspace programs, though.
+
+![Reference Screenshot](neodym.jpg)
+
 ## Installation Guide
 
 At the moment, no pre-compiled binaries for the Neodym operating system are available. The project
