@@ -1,4 +1,4 @@
-use nd_x86_64::{PageTable, PageTableEntry, PageTableFlags, PhysAddr, VirtAddr};
+use nd_x86_64::{Cr3, Cr3Flags, PageTable, PageTableEntry, PageTableFlags, PhysAddr, VirtAddr};
 
 use super::{OutOfPhysicalMemory, PageAllocatorTok};
 use crate::arch::x86_64::KernelInfoTok;
@@ -42,6 +42,14 @@ impl MemoryMapperEntry {
 /// Allocates automatically page tables for custom mappings.
 ///
 /// This is used to manage the memory mapping of processes.
+///
+/// # Higher Half Direct Map
+///
+/// The higher half direct map is mapped in every address space at the same address. This means
+/// that the kernel address space is the same for every process.
+///
+/// However, this direct mapping is only accessible from the kernel. Those pages are not accessible
+/// from ring 3.
 pub struct MemoryMapper {
     /// The physical address of the P4 table.
     l4_table: PhysAddr,
@@ -63,6 +71,18 @@ impl MemoryMapper {
             l4_table: page_allocator.allocate()?,
             page_allocator,
         })
+    }
+
+    /// Switches the current address space to the one represented by this [`MemoryMapper`].
+    ///
+    /// # Safety
+    ///
+    /// Very unsafe, yes.
+    #[inline]
+    pub unsafe fn switch(&self) {
+        unsafe {
+            nd_x86_64::set_cr3(Cr3::new(self.l4_table, Cr3Flags::empty()));
+        }
     }
 
     /// Returns an entry within the whole page table.

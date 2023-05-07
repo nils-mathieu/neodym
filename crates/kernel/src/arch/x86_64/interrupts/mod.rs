@@ -3,6 +3,8 @@
 
 mod apic;
 mod exceptions;
+mod system_call;
 
 pub use self::apic::*;
 pub use self::exceptions::*;
+pub use self::system_call::*;

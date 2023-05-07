@@ -1,6 +1,6 @@
 use nd_x86_64::{
-    DescriptorTable, GateDescriptor, GateType, Idt, IstIndex, PrivilegeLevel, SegmentDescriptor,
-    SegmentSelector, TablePtr, Tss, VirtAddr,
+    DescriptorTable, GateDescriptor, GateType, Ia32Efer, Idt, IstIndex, PrivilegeLevel,
+    SegmentDescriptor, SegmentSelector, Star, TablePtr, Tss, VirtAddr,
 };
 
 /// The global descriptor table that we are going to load. We can't use a simple array because some
@@ -171,5 +171,15 @@ pub unsafe fn initialize_tables() {
         set_interrupt_handler!(39, super::interrupts::apic_spurious);
 
         nd_x86_64::lidt(&IDT.table_ptr());
+
+        // Initialize the system calls handler.
+        nd_log::trace!("Initializing system calls handler...");
+
+        nd_x86_64::set_ia32_efer(nd_x86_64::ia32_efer() | Ia32Efer::SYSTEM_CALL_ENABLE);
+        nd_x86_64::set_star(Star::new(
+            SegmentSelector::new(2, DescriptorTable::Gdt, PrivilegeLevel::Ring3),
+            SegmentSelector::new(1, DescriptorTable::Gdt, PrivilegeLevel::Ring0),
+        ));
+        nd_x86_64::set_lstar(super::interrupts::handle_syscall as usize as VirtAddr);
     }
 }

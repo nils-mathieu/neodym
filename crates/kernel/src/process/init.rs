@@ -3,7 +3,6 @@
 //! This program is usually loaded as a kernel module by the bootloader.
 
 use crate::arch::x86_64::{OutOfPhysicalMemory, PageAllocatorTok};
-use crate::process::Process;
 
 /// The virtual address at which the first userspace program is loaded.
 pub const LOAD_ADDRESS: usize = 0x10_0000;
@@ -27,19 +26,16 @@ pub unsafe fn load_init_program(
 
     // The program must be loaded at the address `0x10_0000` (1 Mb), and its entry point is exactly
     // at this address.
-    let mut init = Process {
-        #[cfg(target_arch = "x86_64")]
-        x86_64: crate::arch::x86_64::Process {
+    #[cfg(target_arch = "x86_64")]
+    {
+        use nd_x86_64::{PageTableFlags, VirtAddr};
+
+        let mut init = crate::arch::x86_64::Process {
             instruction_pointer: LOAD_ADDRESS as nd_x86_64::VirtAddr,
             memory_mapper: unsafe {
                 crate::arch::x86_64::MemoryMapper::new(page_allocator).unwrap()
             },
-        },
-    };
-
-    #[cfg(target_arch = "x86_64")]
-    {
-        use nd_x86_64::{PageTableFlags, VirtAddr};
+        };
 
         use crate::arch::x86_64::MappingError;
 
@@ -49,7 +45,7 @@ pub unsafe fn load_init_program(
         let mut remainder = file;
         let mut page_addr = LOAD_ADDRESS as VirtAddr;
         while !remainder.is_empty() {
-            let entry = match init.x86_64.memory_mapper.create_mapping(page_addr, flags) {
+            let entry = match init.memory_mapper.create_mapping(page_addr, flags) {
                 Ok(entry) => entry,
                 Err(MappingError::AlreadyMapped(_)) => {
                     debug_assert!(false, "unreachable: this page should not be mapped");
@@ -66,9 +62,9 @@ pub unsafe fn load_init_program(
             remainder = unsafe { remainder.get_unchecked(to_copy..) };
             page_addr += 0x1000;
         }
-    }
 
-    unsafe { super::spawn(init) };
+        unsafe { crate::arch::x86_64::spawn(init) };
+    }
 
     Ok(())
 }

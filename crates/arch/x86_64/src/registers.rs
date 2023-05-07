@@ -2,7 +2,7 @@
 
 use bitflags::bitflags;
 
-use crate::{PhysAddr, SegmentSelector, VirtAddr};
+use crate::{PhysAddr, PrivilegeLevel, SegmentSelector, VirtAddr};
 
 use core::arch::asm;
 use core::fmt;
@@ -368,5 +368,172 @@ pub fn cr4() -> Cr4 {
 pub unsafe fn set_cr4(cr4: Cr4) {
     unsafe {
         asm!("mov cr4, {}", in(reg) cr4.bits(), options(nostack, preserves_flags));
+    }
+}
+
+/// The value of **AMD**'s **STAR** register.
+#[derive(Clone, Copy)]
+pub struct Star(u64);
+
+impl Star {
+    /// The value of the **STAR** register.
+    pub const MSR: u32 = 0xC000_0081;
+
+    /// Creates a new `Star` value.
+    #[inline(always)]
+    pub const fn from_raw(raw: u64) -> Self {
+        Self(raw)
+    }
+
+    /// Returns the raw value of the **STAR** register.
+    #[inline(always)]
+    pub const fn to_raw(self) -> u64 {
+        self.0
+    }
+
+    /// Creates a new [`Star`] instance from the given segment selectors indexes.
+    ///
+    /// # Arguments
+    ///
+    /// - `sysret_base`: Specifies both the **CS** and **SS** segment selectors to be loaded when
+    ///   the **SYSRET** instruction is executed. Specifically, **CS** will be set to this
+    ///   segment index plus 2, and **SS** will be set to this segment index plus 1.
+    ///
+    /// - `syscall_base`: Specifies both the **CS** and **SS** segment selectors to be loaded when
+    ///   the **SYSCALL** instruction is executed. Specifically, **CS** will be set to this
+    ///   segment, and **SS** will be set to this segment index plus 1.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, this function panics if the segment selectors do not have a **RPL** of
+    /// 0 and 3 respectively.
+    #[inline(always)]
+    pub const fn new(sysret_base: SegmentSelector, syscall_base: SegmentSelector) -> Self {
+        debug_assert!(
+            matches!(
+                syscall_base.requested_privilege_level(),
+                PrivilegeLevel::Ring0
+            ),
+            "syscall_base should have an RPL of 0"
+        );
+        debug_assert!(
+            matches!(
+                sysret_base.requested_privilege_level(),
+                PrivilegeLevel::Ring3
+            ),
+            "sysret_base should have an RPL of 3"
+        );
+
+        let sysret = sysret_base.to_raw() as u64;
+        let syscall = syscall_base.to_raw() as u64;
+
+        Self(syscall << 32 | sysret << 48)
+    }
+
+    /// Returns the segment selector for the **CS** segment.
+    #[inline(always)]
+    pub const fn cs_syscall(&self) -> SegmentSelector {
+        let t = (self.0 >> 32) as u16;
+        SegmentSelector::from_raw(t)
+    }
+
+    /// Returns the segment selector for the **SS** segment.
+    #[inline(always)]
+    pub const fn ss_syscall(&self) -> SegmentSelector {
+        let t = (self.0 >> 32) as u16;
+        SegmentSelector::from_raw(t + 8)
+    }
+
+    /// Returns the segment selector for the **CS** segment.
+    #[inline(always)]
+    pub const fn cs_sysret(&self) -> SegmentSelector {
+        let t = (self.0 >> 48) as u16;
+        SegmentSelector::from_raw(t + 16)
+    }
+
+    /// Returns the segment selector for the **CS** segment.
+    #[inline(always)]
+    pub const fn ss_sysret(&self) -> SegmentSelector {
+        let t = (self.0 >> 48) as u16;
+        SegmentSelector::from_raw(t + 8)
+    }
+}
+
+impl fmt::Debug for Star {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Star")
+            .field("cs_syscall", &self.cs_syscall())
+            .field("ss_syscall", &self.ss_syscall())
+            .field("cs_sysret", &self.cs_sysret())
+            .field("ss_sysret", &self.ss_sysret())
+            .finish()
+    }
+}
+
+/// The value of **AMD**'s **STAR** register.
+#[inline(always)]
+pub fn star() -> Star {
+    unsafe { Star::from_raw(crate::rdmsr(Star::MSR)) }
+}
+
+/// Sets the value of the **STAR** register.
+#[inline(always)]
+pub unsafe fn set_star(star: Star) {
+    unsafe {
+        crate::wrmsr(Star::MSR, star.to_raw());
+    }
+}
+
+const LSTAR: u32 = 0xC000_0082;
+
+/// The value of **AMD**'s **LSTAR** register.
+///
+/// This is the instruction pointer that will be loaded when the **SYSCALL** instruction is
+/// executed.
+#[inline(always)]
+pub fn lstar() -> VirtAddr {
+    unsafe { crate::rdmsr(LSTAR) }
+}
+
+/// Sets the value of the **LSTAR** register.
+#[inline(always)]
+pub unsafe fn set_lstar(lstar: VirtAddr) {
+    unsafe {
+        crate::wrmsr(LSTAR, lstar);
+    }
+}
+
+bitflags! {
+    /// A possible value of **INTEL**'s **IA32_EFER** register (Extended Feature Enable Register).
+    #[derive(Debug, Clone, Copy)]
+    pub struct Ia32Efer: u64 {
+        /// Enables the `syscall` and `sysret` instructions, for compatibility with AMD
+        /// processors.
+        const SYSTEM_CALL_ENABLE = 1 << 0;
+
+        /// Enables IA-32e mode operation.
+        const IA32_MODE_ENABLE = 1 << 8;
+
+        /// Set when the IA32e mode is active.
+        const IA32_MODE_ENABLE_ACTIVE = 1 << 10;
+
+        ///
+        const EXECUTE_DISABLE = 1 << 11;
+    }
+}
+
+const IA32_EFER: u32 = 0xC000_0080;
+
+/// Returns the value of the **IA32_EFER** register.
+#[inline(always)]
+pub fn ia32_efer() -> Ia32Efer {
+    unsafe { Ia32Efer::from_bits_retain(crate::rdmsr(IA32_EFER)) }
+}
+
+/// Sets the value of the **IA32_EFER** register.
+#[inline(always)]
+pub unsafe fn set_ia32_efer(efer: Ia32Efer) {
+    unsafe {
+        crate::wrmsr(IA32_EFER, efer.bits());
     }
 }
