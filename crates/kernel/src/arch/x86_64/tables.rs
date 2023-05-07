@@ -6,6 +6,7 @@ use nd_x86_64::{
 /// The global descriptor table that we are going to load. We can't use a simple array because some
 /// descriptors may take two slots.
 #[repr(C)]
+#[derive(Debug)]
 struct Gdt {
     null: SegmentDescriptor<1>,
     kernel_code: SegmentDescriptor<1>,
@@ -65,11 +66,11 @@ pub unsafe fn initialize_tables() {
         nd_log::trace!("Setting up the GDT...");
         TSS.set_interrupt_stack(
             IstIndex::One,
-            DOUBLE_FAULT_STACK.as_ptr().add(DOUBLE_FAULT_STACK.len()) as usize as u64,
+            DOUBLE_FAULT_STACK.as_ptr().add(DOUBLE_FAULT_STACK.len()) as usize as VirtAddr,
         );
         TSS.set_stack_pointer(
             PrivilegeLevel::Ring0,
-            KERNEL_STACK.as_ptr().add(KERNEL_STACK.len()) as usize as u64,
+            KERNEL_STACK.as_ptr().add(KERNEL_STACK.len()) as usize as VirtAddr,
         );
 
         GDT.kernel_code = SegmentDescriptor::code(true, PrivilegeLevel::Ring0, false, true);
@@ -83,15 +84,13 @@ pub unsafe fn initialize_tables() {
         );
 
         let cs = SegmentSelector::new(1, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
+        let ss = SegmentSelector::new(2, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
+        let tss_sel = SegmentSelector::new(5, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
 
         nd_x86_64::lgdt(&GDT.table_ptr());
         nd_x86_64::set_cs(cs);
-        nd_x86_64::set_ss(SegmentSelector::from_raw(0));
-        nd_x86_64::ltr(SegmentSelector::new(
-            5,
-            DescriptorTable::Gdt,
-            PrivilegeLevel::Ring0,
-        ));
+        nd_x86_64::set_ss(ss);
+        nd_x86_64::ltr(tss_sel);
 
         // Initialize the IDT.
         nd_log::trace!("Setting up the IDT...");
@@ -124,7 +123,13 @@ pub unsafe fn initialize_tables() {
             set_device_not_available,
             super::interrupts::device_not_available
         );
-        set_exception_handler!(set_double_fault, super::interrupts::double_fault);
+        IDT.set_double_fault(
+            super::interrupts::double_fault,
+            cs,
+            Some(IstIndex::One),
+            GateType::Trap,
+            PrivilegeLevel::Ring0,
+        );
         set_exception_handler!(set_invalid_tss, super::interrupts::invalid_tss);
         set_exception_handler!(
             set_segment_not_present,
@@ -184,5 +189,13 @@ pub unsafe fn initialize_tables() {
             SegmentSelector::new(1, DescriptorTable::Gdt, PrivilegeLevel::Ring0),
         ));
         nd_x86_64::set_lstar(super::interrupts::handle_syscall as usize as VirtAddr);
+
+        // #[allow(unconditional_recursion)]
+        // fn test() {
+        //     test();
+        //     core::hint::black_box(&1);
+        // }
+
+        // test();
     }
 }

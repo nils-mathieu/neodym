@@ -7,6 +7,26 @@ use crate::{PhysAddr, PrivilegeLevel, SegmentSelector, VirtAddr};
 use core::arch::asm;
 use core::fmt;
 
+/// Returns the current value of the stack pointer.
+#[inline(always)]
+pub fn rsp() -> u64 {
+    let rsp: u64;
+    unsafe {
+        asm!("mov {}, rsp", out(reg) rsp, options(nostack, nomem, preserves_flags));
+    }
+    rsp
+}
+
+/// Returns the current value of the instruction pointer.
+#[inline(always)]
+pub fn rip() -> u64 {
+    let rip: u64;
+    unsafe {
+        asm!("lea {}, [rip]", out(reg) rip, options(nostack, nomem, preserves_flags));
+    }
+    rip
+}
+
 bitflags! {
     /// The flags that the CPU keeps track of.
     #[derive(Debug, Clone, Copy)]
@@ -55,7 +75,7 @@ bitflags! {
 pub unsafe fn rflags() -> RFlags {
     unsafe {
         let ret: u64;
-        asm!("pushfq; pop {}", out(reg) ret, options(nomem, preserves_flags));
+        asm!("pushfq; pop {}", out(reg) ret, options(nomem, nostack, preserves_flags));
         RFlags::from_bits_retain(ret)
     }
 }

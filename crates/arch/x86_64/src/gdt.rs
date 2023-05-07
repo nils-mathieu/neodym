@@ -135,7 +135,7 @@ impl fmt::Debug for IstIndex {
 ///
 /// The `SIZE` generic parameter is used to distinguish between the possible sizes of descriptors.
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct SegmentDescriptor<const SIZE: usize>([u64; SIZE]);
 
 impl<const SIZE: usize> SegmentDescriptor<SIZE> {
@@ -165,6 +165,7 @@ impl SegmentDescriptor<1> {
     /// - `conforming`: Whether privilege levels bellow the `dpl` are also allowed to execute code
     /// within the segment.
     /// - `readable`: Whether the segment is readable.
+    #[inline]
     pub const fn code(
         present: bool,
         dpl: PrivilegeLevel,
@@ -193,13 +194,13 @@ impl SegmentDescriptor<1> {
     /// - `direction`: Whether the segment [grows downwards](https://wiki.osdev.org/Expand_Down)
     /// rather than upwards.
     /// - `writable`: Whether the segment is writable.
+    #[inline]
     pub const fn data(present: bool, dpl: PrivilegeLevel, direction: bool, writable: bool) -> Self {
         let mut value = 0;
 
         value |= (present as u64) << 47;
         value |= (dpl as u64) << 45;
         value |= 1 << 44; // descriptor type
-        value |= 1 << 43; // executable
         value |= (direction as u64) << 42;
         value |= (writable as u64) << 41;
 
@@ -228,7 +229,7 @@ impl SegmentDescriptor<2> {
         low |= (tss & 0x00FFFFFF) << 16;
         low |= (present as u64) << 47;
         low |= (dpl as u64) << 45;
-        low |= 0x9 << 40; // TSS
+        low |= 0x9 << 40; // Available 64-bit TSS
 
         Self::from_raw([low, high])
     }
@@ -264,6 +265,18 @@ impl SegmentDescriptor<2> {
         low |= 0x2 << 40; // LDT
 
         Self::from_raw([low, high])
+    }
+}
+
+impl<const N: usize> fmt::Debug for SegmentDescriptor<N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut l = f.debug_list();
+
+        for &word in self.0.iter() {
+            l.entry(&format_args!("{:#x}", word));
+        }
+
+        l.finish()
     }
 }
 

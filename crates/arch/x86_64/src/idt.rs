@@ -62,6 +62,7 @@ impl GateDescriptor {
     /// than this value cannot execute the routine. Note that hardware interrupts ignore this
     /// mechanism.
     /// - `present`: Whether the gate descriptor is present at all.
+    #[inline]
     pub const fn new(
         offset: HandlerAddr,
         selector: SegmentSelector,
@@ -559,5 +560,11 @@ impl InterruptStackFrame {
     #[inline(always)]
     pub fn instruction_pointer(&self) -> VirtAddr {
         self.ip
+    }
+
+    /// Returns the saved stack pointer.
+    #[inline(always)]
+    pub fn stack_pointer(&self) -> VirtAddr {
+        self.sp
     }
 }
