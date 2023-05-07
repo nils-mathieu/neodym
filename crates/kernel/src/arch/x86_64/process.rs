@@ -2,7 +2,7 @@ use core::arch::asm;
 
 use nd_x86_64::VirtAddr;
 
-use super::{MemoryMapper, OutOfPhysicalMemory, PageAllocatorTok};
+use super::{MemoryMapper, OutOfPhysicalMemory};
 
 /// The part of a process's metadata that's specific to the **x86_64** architecture.
 pub struct Process {
@@ -19,8 +19,10 @@ pub struct Process {
 /// # Steps
 ///
 /// 1. Switch the address space to the process's address space.
+///
+/// 2. Use SYSRET to jump to the process's entry point in userspace.
 pub fn spawn(state: Process) -> Result<(), OutOfPhysicalMemory> {
-    // Map the kernel address space into the program.
+    unsafe { state.memory_mapper.switch() };
 
     unsafe {
         asm!(

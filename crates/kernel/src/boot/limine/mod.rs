@@ -87,7 +87,6 @@ extern "C" fn entry_point() -> ! {
     #[cfg(target_arch = "x86_64")]
     unsafe {
         crate::arch::x86_64::initialize_logger();
-        crate::arch::x86_64::initialize_tables();
     }
 
     let Some(kernel_addr) = KERNEL_ADDR.response() else {
@@ -102,6 +101,7 @@ extern "C" fn entry_point() -> ! {
 
     #[cfg(target_arch = "x86_64")]
     unsafe {
+        crate::arch::x86_64::initialize_tables();
         KernelInfoTok::initialize(KernelInfo {
             kernel_addr: kernel_addr.physical_base(),
             kernel_size: 0,

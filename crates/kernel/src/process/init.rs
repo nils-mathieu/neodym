@@ -63,7 +63,7 @@ pub unsafe fn load_init_program(
             page_addr += 0x1000;
         }
 
-        unsafe { crate::arch::x86_64::spawn(init) };
+        crate::arch::x86_64::spawn(init)?;
     }
 
     Ok(())

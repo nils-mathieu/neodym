@@ -53,6 +53,9 @@ static mut IDT: Idt = Idt::new();
 
 /// Initializes the **GDT** and the **IDT**.
 ///
+/// This function will also update model specific registers to enable the `syscall` and `sysret`
+/// instructions, as they require specific segment selectors to be set.
+///
 /// # Safety
 ///
 /// This function must only be called once.
@@ -173,7 +176,7 @@ pub unsafe fn initialize_tables() {
         nd_x86_64::lidt(&IDT.table_ptr());
 
         // Initialize the system calls handler.
-        nd_log::trace!("Initializing system calls handler...");
+        nd_log::trace!("Setting up system calls...");
 
         nd_x86_64::set_ia32_efer(nd_x86_64::ia32_efer() | Ia32Efer::SYSTEM_CALL_ENABLE);
         nd_x86_64::set_star(Star::new(
