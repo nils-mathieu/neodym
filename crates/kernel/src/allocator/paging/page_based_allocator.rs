@@ -20,7 +20,7 @@ const SLOT_COUNT: usize = PAGE_SIZE / SLOT_SIZE;
 #[allow(clippy::assertions_on_constants)]
 const _: () = assert!(PAGE_SIZE % SLOT_SIZE == 0);
 
-/// Metadata about a page that has been allocated by the [`KernelAllocator`].
+/// Metadata about a page that has been allocated by the global page allocator.
 ///
 /// Each page can store allocation from 64 to 4096 bytes.
 struct PageMeta {
@@ -332,7 +332,7 @@ pub struct PageBasedAllocator {
 }
 
 impl PageBasedAllocator {
-    /// Creates a new [`State`].
+    /// Creates a [`PageBasedAllocator`] instance.
     #[inline(always)]
     pub const fn new(page_allocator: PageAllocatorTok) -> Self {
         Self {

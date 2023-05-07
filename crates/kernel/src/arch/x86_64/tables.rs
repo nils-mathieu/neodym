@@ -189,13 +189,5 @@ pub unsafe fn initialize_tables() {
             SegmentSelector::new(1, DescriptorTable::Gdt, PrivilegeLevel::Ring0),
         ));
         nd_x86_64::set_lstar(super::interrupts::handle_syscall as usize as VirtAddr);
-
-        // #[allow(unconditional_recursion)]
-        // fn test() {
-        //     test();
-        //     core::hint::black_box(&1);
-        // }
-
-        // test();
     }
 }

@@ -1,7 +1,7 @@
 use nd_x86_64::{InterruptStackFrame, PageFaultError, TableEntryError};
 
 pub extern "x86-interrupt" fn double_fault(_: InterruptStackFrame, _: u64) -> ! {
-    panic!("Double Fault");
+    panic!("Double Fault {:x}", nd_x86_64::rsp());
 }
 
 pub extern "x86-interrupt" fn invalid_op_code(frame: InterruptStackFrame) {

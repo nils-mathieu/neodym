@@ -6,8 +6,8 @@
 //! ## Boot Sequence
 //!
 //! This part of the kernel expects the machine to be loaded in a specific machine state detailed
-//! in the different sub-modules of the [`arch`] module (see [`arch::entry_point`]). However, the
-//! literal entry points of the kernel are defined under the [`boot`] module.
+//! in the different sub-modules of the [`arch`] module. However, the literal entry points of the
+//! kernel are defined under the [`boot`] module.
 //!
 //! Those two modules are different because some bootloaders (such as
 //! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md)) may support

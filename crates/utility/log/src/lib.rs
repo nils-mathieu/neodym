@@ -83,7 +83,7 @@ macro_rules! log {
     };
 }
 
-/// Logs a message with the [`Verobisty::Error`] level.
+/// Logs a message with the [`Verbosity::Error`] level.
 #[macro_export]
 macro_rules! error {
     ($($args:tt)*) => {
@@ -91,7 +91,7 @@ macro_rules! error {
     };
 }
 
-/// Logs a message with the [`Verobisty::Warn`] level.
+/// Logs a message with the [`Verbosity::Warn`] level.
 #[macro_export]
 macro_rules! warn {
     ($($args:tt)*) => {
@@ -99,7 +99,7 @@ macro_rules! warn {
     };
 }
 
-/// Logs a message with the [`Verobisty::Info`] level.
+/// Logs a message with the [`Verbosity::Info`] level.
 #[macro_export]
 macro_rules! info {
     ($($args:tt)*) => {
@@ -107,7 +107,7 @@ macro_rules! info {
     };
 }
 
-/// Logs a message with the [`Verobisty::Trace`] level.
+/// Logs a message with the [`Verbosity::Trace`] level.
 #[macro_export]
 macro_rules! trace {
     ($($args:tt)*) => {

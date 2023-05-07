@@ -25,7 +25,7 @@ impl KernelAllocatorTok {
     ///
     /// # Safety
     ///
-    /// The [`KernelAllocator::initialize`] function must have been called before this function is
+    /// The [`KernelAllocatorTok::initialize`] function must have been called before this function.
     #[inline(always)]
     pub const unsafe fn unchecked() -> Self {
         Self(())

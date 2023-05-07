@@ -244,7 +244,7 @@ impl Cr3 {
 
     /// Returns the flags of the P4 table.
     ///
-    /// Note that this is only applicable if the [`Cr4::PCIDE`] flag is clear.
+    /// Note that this is only applicable if the [`Cr4::PCID`] flag is clear.
     #[inline(always)]
     pub fn flags(self) -> Cr3Flags {
         Cr3Flags::from_bits_truncate(self.0)

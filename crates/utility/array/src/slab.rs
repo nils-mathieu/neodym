@@ -7,7 +7,7 @@ pub struct Slab<T, const N: usize> {
 }
 
 impl<T, const N: usize> Slab<T, N> {
-    /// Creates a new empty [`IndexMap<T, N>`].
+    /// Creates a new empty [`Slab<T, N>`].
     pub const fn new() -> Self {
         Self {
             data: Vec::new(),

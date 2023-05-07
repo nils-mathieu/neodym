@@ -213,9 +213,11 @@ impl SegmentDescriptor<2> {
     ///
     /// # Arguments
     ///
-    /// `present`: Whether the descriptor is present. Must be set for any valid descriptor.
-    /// `dpl`: The privilege level of the segment.
-    /// `tss`: The virtual address of the *Task State Segment* structure.
+    /// * `present`: Whether the descriptor is present. Must be set for any valid descriptor.
+    ///
+    /// * `dpl`: The privilege level of the segment.
+    ///
+    /// * `tss`: The virtual address of the *Task State Segment* structure.
     pub const fn tss(present: bool, dpl: PrivilegeLevel, tss: VirtAddr) -> Self {
         let mut high = 0;
         let mut low = 0;
@@ -238,10 +240,13 @@ impl SegmentDescriptor<2> {
     ///
     /// # Arguments
     ///
-    /// `present`: Whether the descriptor is present. Must be set for any valid descriptor.
-    /// `dpl`: The privilege level of the segment.
-    /// `ldt`: The virtual address of the **LDT** structure.
-    /// `limit`: The size in bytes of the **LIDT**, minus one.
+    /// * `present`: Whether the descriptor is present. Must be set for any valid descriptor.
+    ///
+    /// * `dpl`: The privilege level of the segment.
+    ///
+    /// * `ldt`: The virtual address of the **LDT** structure.
+    ///
+    /// * `limit`: The size in bytes of the **LIDT**, minus one.
     ///
     /// # Panics
     ///
