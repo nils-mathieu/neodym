@@ -22,10 +22,8 @@
 #![feature(allocator_api)]
 #![feature(naked_functions)]
 
-mod allocator;
 mod arch;
 mod boot;
-mod process;
 
 /// This function is called when something in our code panics. This should be considered a serious
 /// bug in the kernel.

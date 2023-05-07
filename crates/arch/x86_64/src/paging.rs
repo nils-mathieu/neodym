@@ -37,6 +37,36 @@ bitflags! {
         ///
         /// The bit [`Cr4::PAGE_GLOBAL`] of the **CR4** register must be set to use global pages.
         const GLOBAL = 1 << 8;
+
+        /// A user-defined bit.
+        const USER_0 = 1 << 9;
+        /// A user-defined bit.
+        const USER_1 = 1 << 10;
+        /// A user-defined bit.
+        const USER_2 = 1 << 11;
+        /// A user-defined bit.
+        const USER_3 = 1 << 52;
+        /// A user-defined bit.
+        const USER_4 = 1 << 53;
+        /// A user-defined bit.
+        const USER_5 = 1 << 54;
+        /// A user-defined bit.
+        const USER_6 = 1 << 55;
+        /// A user-defined bit.
+        const USER_7 = 1 << 56;
+        /// A user-defined bit.
+        const USER_8 = 1 << 57;
+        /// A user-defined bit.
+        const USER_9 = 1 << 58;
+        /// A user-defined bit.
+        const USER_10 = 1 << 59;
+        /// A user-defined bit.
+        const USER_11 = 1 << 60;
+        /// A user-defined bit.
+        const USER_12 = 1 << 61;
+        /// A user-defined bit.
+        const USER_13 = 1 << 62;
+
         /// Indicates that the page cannot be used for executing code.alloc
         ///
         /// This bit is only valid if the `NXE` bit of the **EFER** register is set.

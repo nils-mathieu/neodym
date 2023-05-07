@@ -39,6 +39,10 @@ impl MemoryMapperEntry {
     }
 }
 
+/// The flag that we're using to determine whether a given page should be deallocate when a
+/// [`MemoryMapper`] is dropped.
+const OWNED: PageTableFlags = PageTableFlags::USER_0;
+
 /// Allocates automatically page tables for custom mappings.
 ///
 /// This is used to manage the memory mapping of processes.
@@ -50,6 +54,16 @@ impl MemoryMapperEntry {
 ///
 /// However, this direct mapping is only accessible from the kernel. Those pages are not accessible
 /// from ring 3.
+///
+/// # Conditional Ownership
+///
+/// Some bits of the table entry flags can be defined by the user (us). We're using the first one
+/// to determine whether we should deallocate the page when the `MemoryMapper` is dropped or not.
+/// Note that this process is recursive, meaning that if a page is not owned, then none of its
+/// children can be owned either.
+///
+/// This is mainly used for the kernel's address space, where we don't want to deallocate the
+/// pages.
 pub struct MemoryMapper {
     /// The physical address of the P4 table.
     l4_table: PhysAddr,
@@ -61,12 +75,8 @@ impl MemoryMapper {
     ///
     /// This function attempts to allocate a phyiscal page, and will fail if there is no more
     /// memory available.
-    ///
-    /// # Safety
-    ///
-    /// This function must be called after the page allocator has been initialized.
     #[inline]
-    pub unsafe fn new(page_allocator: PageAllocatorTok) -> Result<Self, OutOfPhysicalMemory> {
+    pub fn new(page_allocator: PageAllocatorTok) -> Result<Self, OutOfPhysicalMemory> {
         Ok(Self {
             l4_table: page_allocator.allocate()?,
             page_allocator,
@@ -99,8 +109,10 @@ impl MemoryMapper {
         let hhdm = self.page_allocator.kernel_info().hhdm_offset;
 
         // Those are the flags that we'll give to non-leaf entries.
-        let parent_flags =
-            PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
+        let parent_flags = PageTableFlags::PRESENT
+            | PageTableFlags::WRITABLE
+            | PageTableFlags::USER_ACCESSIBLE
+            | OWNED;
 
         let l4_idx = (virtual_address >> 39) & 0o777;
         let l3_idx = (virtual_address >> 30) & 0o777;
@@ -162,7 +174,7 @@ impl Drop for MemoryMapper {
             // Level 1 page table do not have children.
             if level > 1 {
                 for entry in &mut table.0 {
-                    if *entry != PageTableEntry::UNUSED {
+                    if *entry != PageTableEntry::UNUSED && entry.flags().contains(OWNED) {
                         unsafe { drop_recursive(entry.addr(), page_allocator, level - 1) };
                     }
                 }

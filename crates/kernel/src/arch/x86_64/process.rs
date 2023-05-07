@@ -13,8 +13,7 @@ pub struct Process {
     pub instruction_pointer: VirtAddr,
 }
 
-/// Initializes the provided userspace process to be spawned. This is the initialization function
-/// for the **x86_64** architecture.
+/// Spawns the provided userspace process.
 ///
 /// # Steps
 ///
