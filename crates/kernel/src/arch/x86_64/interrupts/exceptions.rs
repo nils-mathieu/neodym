@@ -2,9 +2,11 @@ use nd_x86_64::{InterruptStackFrame, PageFaultError, TableEntryError};
 
 pub extern "x86-interrupt" fn double_fault(frame: InterruptStackFrame, code: u64) -> ! {
     nd_log::trace!("Double Fault (code = {})", code);
-    nd_log::trace!(" > RIP = {:#x}", frame.instruction_pointer());
-    nd_log::trace!(" > RSP = {:#x}", frame.stack_pointer());
-    panic!("Double Fault");
+    panic!(
+        "Double Fault (RIP = {:x}, RSP = {:x}",
+        frame.instruction_pointer(),
+        frame.stack_pointer()
+    );
 }
 
 pub extern "x86-interrupt" fn invalid_op_code(frame: InterruptStackFrame) {
@@ -37,9 +39,14 @@ pub extern "x86-interrupt" fn general_protection_fault(
     }
 }
 
-pub extern "x86-interrupt" fn page_fault(_: InterruptStackFrame, err: PageFaultError) {
-    let addr = nd_x86_64::cr2();
-    panic!("Page Fault (err = {err:?}, addr = {addr:#x})");
+pub extern "x86-interrupt" fn page_fault(frame: InterruptStackFrame, err: PageFaultError) {
+    panic!(
+        "Page Fault (err = {:?}, addr = {:#x}, RIP = {:#x}, RSP = {:#x})",
+        err,
+        nd_x86_64::cr2(),
+        frame.instruction_pointer(),
+        frame.stack_pointer()
+    );
 }
 
 pub extern "x86-interrupt" fn division_error(_: InterruptStackFrame) {

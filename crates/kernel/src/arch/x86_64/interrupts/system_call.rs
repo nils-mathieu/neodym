@@ -7,7 +7,7 @@ pub extern "C" fn handle_syscall(arg0: usize, arg1: usize, arg2: usize) -> usize
         asm!(
             r#"
             mov rcx, rax
-            call handle_syscall_inner
+            call nd_handle_syscall_inner
             sysret
             "#,
             options(noreturn)
@@ -17,6 +17,11 @@ pub extern "C" fn handle_syscall(arg0: usize, arg1: usize, arg2: usize) -> usize
 
 #[inline(always)] // no sure whether the compiler can inline this. it would be nice.
 #[no_mangle]
-extern "C" fn handle_syscall_inner(_arg0: usize, _arg1: usize, _arg2: usize, no: usize) -> usize {
+extern "C" fn nd_handle_syscall_inner(
+    _arg0: usize,
+    _arg1: usize,
+    _arg2: usize,
+    no: usize,
+) -> usize {
     todo!("Implement system calls (no = {})", no);
 }

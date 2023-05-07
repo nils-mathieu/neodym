@@ -11,6 +11,9 @@ pub struct Process {
     /// The saved instruction pointer of the process, within its own address space. Note that this
     /// value isn't updated in real-time.
     pub instruction_pointer: VirtAddr,
+    /// The stack pointer of the process, within its own address space. Note that this value isn't
+    /// updated in real-time.
+    pub stack_pointer: VirtAddr,
 }
 
 /// Spawns the provided userspace process.
@@ -39,9 +42,11 @@ pub fn spawn(mut state: Process) -> Result<(), OutOfPhysicalMemory> {
     unsafe {
         asm!(
             r#"
+            mov rsp, {}
             sysret
             "#,
-            in ("rcx") state.instruction_pointer,
+            in(reg) state.stack_pointer,
+            in("rcx") state.instruction_pointer,
             options(noreturn)
         );
     }

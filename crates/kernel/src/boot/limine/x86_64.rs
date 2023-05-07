@@ -111,12 +111,15 @@ pub extern "C" fn entry_point() -> ! {
 fn spawn_nd_init(page_allocator: PageAllocatorTok, data: &[u8]) -> Result<(), OutOfPhysicalMemory> {
     // Start the initial program! This is the end of the boot process.
     const LOADED_AT: VirtAddr = 0x10_0000;
+    const STACK_SIZE_IN_PAGES: u64 = 16;
+    const STACK_BASE: VirtAddr = LOADED_AT - 0x1000;
 
     nd_log::trace!("Loading the `nd_init` program...");
 
     let mut process = Process {
         instruction_pointer: LOADED_AT,
         memory_mapper: MemoryMapper::new(page_allocator)?,
+        stack_pointer: STACK_BASE,
     };
 
     // Map the process itself into its address space.
@@ -152,6 +155,27 @@ fn spawn_nd_init(page_allocator: PageAllocatorTok, data: &[u8]) -> Result<(), Ou
         //  `to_copy` has been constructed such that is is always smaller or equal to the
         //  length of `remainder`.
         remainder = unsafe { remainder.get_unchecked(to_copy..) };
+        virt_addr += 0x1000;
+    }
+
+    // Setup 64 kib of stack for the process.
+    let mut remaining = STACK_SIZE_IN_PAGES;
+    // Minus one to keep a page between the stack and the program. That the guard page.
+    let mut virt_addr = STACK_BASE - STACK_SIZE_IN_PAGES * 0x1000;
+    while remaining != 0 {
+        match process.memory_mapper.allocate_mapping(
+            virt_addr,
+            PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT,
+        ) {
+            Ok(_) => (),
+            Err(MappingError::OutOfPhysicalMemory) => return Err(OutOfPhysicalMemory),
+            Err(MappingError::AlreadyMapped(_)) => {
+                debug_assert!(false, "nothing should be mapped here...");
+                unsafe { core::hint::unreachable_unchecked() };
+            }
+        }
+
+        remaining -= 1;
         virt_addr += 0x1000;
     }
 
