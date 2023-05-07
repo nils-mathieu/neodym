@@ -7,7 +7,10 @@ use nd_limine::{
     Request,
 };
 
-use crate::arch::x86_64::{KernelInfo, MemorySegment, OutOfPhysicalMemory};
+#[cfg(target_arch = "x86_64")]
+use crate::arch::x86_64::{
+    KernelInfo, KernelInfoTok, MemorySegment, OutOfPhysicalMemory, PageAllocatorTok,
+};
 
 /// Requests the bootloader to provide information about itself, such as its name and version.
 /// Those information will be logged at startup.
@@ -99,7 +102,7 @@ extern "C" fn entry_point() -> ! {
 
     #[cfg(target_arch = "x86_64")]
     unsafe {
-        crate::arch::x86_64::initialize_kernel_info(KernelInfo {
+        KernelInfoTok::initialize(KernelInfo {
             kernel_addr: kernel_addr.physical_base(),
             kernel_size: 0,
             hhdm_offset: hhdm.offset(),
@@ -147,16 +150,18 @@ extern "C" fn entry_point() -> ! {
     //  four gigabytes, ensuring that the page tables are properly identity mapped.
     #[cfg(target_arch = "x86_64")]
     unsafe {
-        crate::arch::x86_64::initialize_page_allocator(&mut available_memory);
+        PageAllocatorTok::initialize(KernelInfoTok::unchecked(), &mut available_memory);
         crate::arch::x86_64::initialize_lapic();
         nd_x86_64::sti();
     }
 
     unsafe {
-        crate::allocator::initialize_allocator();
+        crate::allocator::KernelAllocatorTok::initialize();
     }
 
-    match unsafe { crate::process::load_init_program(nd_init.data()) } {
+    match unsafe {
+        crate::process::load_init_program(PageAllocatorTok::unchecked(), nd_init.data())
+    } {
         Ok(()) => (),
         Err(OutOfPhysicalMemory) => {
             nd_log::error!("Failed to load the initial program: The system is out of memory.");

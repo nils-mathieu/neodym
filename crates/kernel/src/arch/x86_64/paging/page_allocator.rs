@@ -1,12 +1,15 @@
 use core::alloc::AllocError;
 use core::fmt;
 use core::mem::{size_of, MaybeUninit};
+use core::ops::Deref;
 use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use core::sync::atomic::{AtomicPtr, AtomicUsize};
 
 use nd_array::Vec;
 use nd_spin::Mutex;
-use nd_x86_64::{PhysAddr, VirtAddr};
+use nd_x86_64::PhysAddr;
+
+use crate::arch::x86_64::KernelInfoTok;
 
 /// The system is out of available physical memory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,11 +74,20 @@ pub struct PageAllocator {
     next_free: AtomicUsize,
     /// The list of free pages.
     free_pages: AtomicPtr<FreePageListNode>,
+
+    /// Proves that the global kernel info structure has been initialized.
+    info: KernelInfoTok,
 }
 
 impl PageAllocator {
     /// The maximum number of segments that can be managed by the page allocator.
     pub const MAX_SEGMENT_COUNT: usize = 16;
+
+    /// Returns a token proving that the global kernel info structure has been initialized.
+    #[inline(always)]
+    pub fn kernel_info(&self) -> KernelInfoTok {
+        self.info
+    }
 
     /// Allocates a new physical page.
     ///
@@ -168,11 +180,9 @@ impl PageAllocator {
             cur = &node.next;
         }
 
-        let info = unsafe { crate::arch::x86_64::kernel_info() };
-
         // We got to the end of the free list, and we didn't find a node that can store our
         // new page. We need to allocate a new node. We'll use the deallocated node for this.
-        let page_node_ptr = (addr + info.hhdm_offset) as *mut FreePageListNode;
+        let page_node_ptr = (addr + self.info.hhdm_offset) as *mut FreePageListNode;
 
         unsafe { page_node_ptr.write(FreePageListNode::new()) };
 
@@ -225,90 +235,104 @@ fn human_bytes(bytes: u64) -> impl fmt::Display {
 /// The global page allocator.
 static mut PAGE_ALLOCATOR: MaybeUninit<PageAllocator> = MaybeUninit::uninit();
 
-/// Returns the global page allocator.
-///
-/// # Safety
-///
-/// This function must only be called *after* [`initialize_paging`] has been called.
-///
-/// # Panics
-///
-/// In debug builds, this function panics if the page allocator has not been initialized.
-#[inline(always)]
-pub unsafe fn page_allocator() -> &'static PageAllocator {
-    // SAFETY:
-    //  The caller must make sure that the page allocator has been initialized.
-    unsafe { PAGE_ALLOCATOR.assume_init_ref() }
-}
+/// A "token type" proving that the global [`PageAllocator`] has been initialized.
+#[derive(Clone, Copy)]
+pub struct PageAllocatorTok(());
 
-/// Initializes the page allocator.
-///
-/// # Arguments
-///
-/// `usable` is an iterator over the usable memory regions. This memory will be used by the
-/// page allocator when allocating memory. The segments must be aligned to a page boundary (in base
-/// and in length). The segments must be sorted by base address. Segments may not overlap, but they
-/// can be adjacent.
-///
-/// # Safety
-///
-/// The kernel info structure must've been initialized.
-///
-/// This function expects to be called only once.
-///
-/// Note that this function will take ownership of all provided useable memory regions. This means
-/// that accessing those regions after this function has been called without first going through
-/// memory management functions may result in undefined behavior. Note that the provided iterator
-/// may reference data within usable memory. It will be consumed before the memory manager
-/// initializes itself.
-///
-/// Also, after this function has been called, the page tables will be logically owned by the
-/// page allocator. Accessing it outside of the module will trigger undefined behavior.
-///
-/// A higher-half direct map must be set up at `hhdm`.
-pub unsafe fn initialize_page_allocator(usable: &mut dyn Iterator<Item = MemorySegment>) {
-    nd_log::trace!("Initializing the page allocator...");
+impl PageAllocatorTok {
+    /// Returns an instance of [`PageAllocatorTok`].
+    ///
+    /// # Safety
+    ///
+    /// The [`PageAllocatorTok::initialize`] function must've been called previously.
+    #[inline(always)]
+    pub unsafe fn unchecked() -> Self {
+        Self(())
+    }
 
-    let mut segments = Vec::<MemorySegment, { PageAllocator::MAX_SEGMENT_COUNT }>::new();
-    let mut pages = 0;
-    for segment in usable.take(segments.capacity()) {
-        pages += segment.length / 0x1000;
+    /// Initializes the page allocator.
+    ///
+    /// # Arguments
+    ///
+    /// `usable` is an iterator over the usable memory regions. This memory will be used by the
+    /// page allocator when allocating memory. The segments must be aligned to a page boundary (in base
+    /// and in length). The segments must be sorted by base address. Segments may not overlap, but they
+    /// can be adjacent.
+    ///
+    /// # Safety
+    ///
+    /// The kernel info structure must've been initialized.
+    ///
+    /// This function expects to be called only once.
+    ///
+    /// Note that this function will take ownership of all provided useable memory regions. This means
+    /// that accessing those regions after this function has been called without first going through
+    /// memory management functions may result in undefined behavior. Note that the provided iterator
+    /// may reference data within usable memory. It will be consumed before the memory manager
+    /// initializes itself.
+    ///
+    /// Also, after this function has been called, the page tables will be logically owned by the
+    /// page allocator. Accessing it outside of the module will trigger undefined behavior.
+    ///
+    /// A higher-half direct map must be set up at `hhdm`.
+    pub unsafe fn initialize(
+        info: KernelInfoTok,
+        usable: &mut dyn Iterator<Item = MemorySegment>,
+    ) -> Self {
+        nd_log::trace!("Initializing the page allocator...");
 
-        if let Some(last) = segments.last_mut() {
-            // Attempt to merge the current segment with the last one.
-            if last.base + last.length == segment.base {
-                last.length += segment.length;
-                continue;
+        let mut segments = Vec::<MemorySegment, { PageAllocator::MAX_SEGMENT_COUNT }>::new();
+        let mut pages = 0;
+        for segment in usable.take(segments.capacity()) {
+            pages += segment.length / 0x1000;
+
+            if let Some(last) = segments.last_mut() {
+                // Attempt to merge the current segment with the last one.
+                if last.base + last.length == segment.base {
+                    last.length += segment.length;
+                    continue;
+                }
             }
+
+            unsafe { segments.push_unchecked(segment) };
         }
 
-        unsafe { segments.push_unchecked(segment) };
+        let remaining = usable.count();
+        if remaining != 0 {
+            nd_log::warn!("Too many usable memory regions, {remaining} have been ignored.");
+        }
+
+        nd_log::info!(
+            "{} pages of usable memory, in {} contiguous segments, {} in total.",
+            pages,
+            segments.len(),
+            human_bytes(pages * 0x1000)
+        );
+
+        // SAFETY:
+        //  This function can only be called once, ensuring that we're not:
+        //  1. overwriting an existing instance of the page allocator.
+        //  2. messing with another thread that would be using the page allocator.
+        //
+        // After this function has been called, the page allocator may only be accessed through
+        // shared references.
+        unsafe {
+            PAGE_ALLOCATOR.write(PageAllocator {
+                segments,
+                next_free: AtomicUsize::new(0),
+                free_pages: AtomicPtr::new(core::ptr::null_mut()),
+                info,
+            });
+            Self::unchecked()
+        }
     }
+}
 
-    let remaining = usable.count();
-    if remaining != 0 {
-        nd_log::warn!("Too many usable memory regions, {remaining} have been ignored.");
-    }
+impl Deref for PageAllocatorTok {
+    type Target = PageAllocator;
 
-    nd_log::info!(
-        "{} pages of usable memory, in {} contiguous segments, {} in total.",
-        pages,
-        segments.len(),
-        human_bytes(pages * 0x1000)
-    );
-
-    // SAFETY:
-    //  This function can only be called once, ensuring that we're not:
-    //  1. overwriting an existing instance of the page allocator.
-    //  2. messing with another thread that would be using the page allocator.
-    //
-    // After this function has been called, the page allocator may only be accessed through
-    // shared references.
-    unsafe {
-        PAGE_ALLOCATOR.write(PageAllocator {
-            segments,
-            next_free: AtomicUsize::new(0),
-            free_pages: AtomicPtr::new(core::ptr::null_mut()),
-        });
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        unsafe { PAGE_ALLOCATOR.assume_init_ref() }
     }
 }

@@ -14,6 +14,7 @@ pub struct Process {
 /// # Safety
 ///
 /// The global process scheduler must have been initialized previously.
-pub unsafe fn spawn(_state: Process) {
+pub unsafe fn spawn(mut state: Process) {
+    unsafe { crate::arch::x86_64::setup_process(&mut state.x86_64) };
     todo!();
 }

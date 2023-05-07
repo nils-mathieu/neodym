@@ -1,5 +1,7 @@
 use core::mem::size_of;
 
+use crate::arch::x86_64::PageAllocatorTok;
+
 use super::PageBox;
 use super::PAGE_SIZE;
 
@@ -16,13 +18,23 @@ impl<T> Node<T> {
 /// A linked-list of pages allocated by the global page allocator.
 pub struct PageList<T> {
     head: Option<PageBox<Node<T>>>,
+    page_allocator: PageAllocatorTok,
 }
 
 impl<T> PageList<T> {
     /// Creates a new empty [`PageList`].
     #[inline(always)]
-    pub const fn new() -> Self {
-        Self { head: None }
+    pub const fn new(page_allocator: PageAllocatorTok) -> Self {
+        Self {
+            head: None,
+            page_allocator,
+        }
+    }
+
+    /// Returns a proof that the global page allocator has been initialized.
+    #[inline(always)]
+    pub fn page_allocator(&self) -> PageAllocatorTok {
+        self.page_allocator
     }
 
     /// Returns a cursor over the nodes of this [`PageList`].
@@ -30,6 +42,7 @@ impl<T> PageList<T> {
     pub fn cursor(&mut self) -> Cursor<T> {
         Cursor {
             current: &mut self.head,
+            page_allocator: self.page_allocator,
         }
     }
 
@@ -68,6 +81,7 @@ impl<'a, T> IntoIterator for &'a mut PageList<T> {
 /// A cursor over the nodes of a [`PageList`].
 pub struct Cursor<'a, T> {
     current: &'a mut Option<PageBox<Node<T>>>,
+    page_allocator: PageAllocatorTok,
 }
 
 impl<'a, T> Cursor<'a, T> {
@@ -108,13 +122,14 @@ impl<'a, T> Cursor<'a, T> {
     ///
     /// This function returns its input if the allocation fails.
     pub fn insert(&mut self, elem: T) -> Result<(), T> {
-        let mut node = unsafe {
-            PageBox::new(Node {
+        let mut node = PageBox::new(
+            Node {
                 next: None,
                 data: elem,
-            })
-            .map_err(|node| node.data)?
-        };
+            },
+            self.page_allocator,
+        )
+        .map_err(|node| node.data)?;
 
         node.next = self.current.take();
         *self.current = Some(node);

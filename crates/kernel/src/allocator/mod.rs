@@ -2,93 +2,106 @@
 
 use core::alloc::{AllocError, Allocator, Layout};
 use core::mem::MaybeUninit;
+use core::ops::Deref;
 use core::ptr::NonNull;
+
+use crate::arch::x86_64::PageAllocatorTok;
 
 #[cfg(target_arch = "x86_64")]
 pub mod paging;
 
 /// The allocator type used throughout the kernel.
 #[cfg(target_arch = "x86_64")]
-type ConcreteKernelAllocator = self::paging::PageBasedAllocator;
+pub type KernelAllocator = self::paging::PageBasedAllocator;
 
-static mut KERNEL_ALLOCATOR: MaybeUninit<ConcreteKernelAllocator> = MaybeUninit::uninit();
+static mut KERNEL_ALLOCATOR: MaybeUninit<KernelAllocator> = MaybeUninit::uninit();
 
-/// Initializes the kernel's memory allocator.
-///
-/// # Safety
-///
-/// This function must be called once!
-///
-/// On **x86_64**, this function must be called before the kernel's paging system is initialized.
-#[inline(always)]
-pub unsafe fn initialize_allocator() {
-    unsafe { KERNEL_ALLOCATOR.write(ConcreteKernelAllocator::new()) };
-}
+/// A "token type" that proves the global kernel allocator is initialized.
+#[derive(Clone, Copy)]
+pub struct KernelAllocatorTok(());
 
-/// Returns a reference to the kernel's memory allocator.
-///
-/// # Safety
-///
-/// This function may only be called after the kernel's memory allocator has been initialized
-/// using the [`initialize_allocator`] function.
-#[inline(always)]
-unsafe fn kernel_allocator() -> &'static ConcreteKernelAllocator {
-    unsafe { KERNEL_ALLOCATOR.assume_init_ref() }
-}
-
-/// An allocator forwards all calls to the kernel's global memory allocator.
-pub struct KernelAllocator(());
-
-impl KernelAllocator {
-    /// Creates an new [`KernelAllocator`] instance.
+impl KernelAllocatorTok {
+    /// Creates a new [`KernelAllocator`] instance.
     ///
     /// # Safety
     ///
-    /// This function must be called after the kernel's memory allocator has been initialized
-    /// through the [`initialize_allocator`] function.
+    /// The [`KernelAllocator::initialize`] function must have been called before this function is
     #[inline(always)]
-    pub const unsafe fn new() -> Self {
+    pub const unsafe fn unchecked() -> Self {
         Self(())
+    }
+
+    /// Initializes the global kernel allocator, returning a token proving that it has been
+    ///
+    /// # Safety
+    ///
+    /// This function must only be called once!
+    ///
+    /// * On **x86_64**, this function must be called when the global page allocator has been
+    ///   initialized.
+    #[inline(always)]
+    pub unsafe fn initialize() -> Self {
+        #[cfg(target_arch = "x86_64")]
+        unsafe {
+            KERNEL_ALLOCATOR.write(KernelAllocator::new(PageAllocatorTok::unchecked()));
+        }
+
+        unsafe { Self::unchecked() }
     }
 }
 
-unsafe impl Allocator for KernelAllocator {
+impl Deref for KernelAllocatorTok {
+    type Target = KernelAllocator;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        unsafe { KERNEL_ALLOCATOR.assume_init_ref() }
+    }
+}
+
+unsafe impl Allocator for KernelAllocatorTok {
+    #[inline(always)]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        unsafe { kernel_allocator().allocate(layout) }
+        KernelAllocator::allocate(self, layout)
     }
 
+    #[inline(always)]
     fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        unsafe { kernel_allocator().allocate_zeroed(layout) }
+        KernelAllocator::allocate_zeroed(self, layout)
     }
 
+    #[inline(always)]
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        unsafe { kernel_allocator().deallocate(ptr, layout) }
+        unsafe { KernelAllocator::deallocate(self, ptr, layout) }
     }
 
+    #[inline(always)]
     unsafe fn grow(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        unsafe { kernel_allocator().grow(ptr, old_layout, new_layout) }
+        unsafe { KernelAllocator::grow(self, ptr, old_layout, new_layout) }
     }
 
+    #[inline(always)]
     unsafe fn grow_zeroed(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        unsafe { kernel_allocator().grow_zeroed(ptr, old_layout, new_layout) }
+        unsafe { KernelAllocator::grow_zeroed(self, ptr, old_layout, new_layout) }
     }
 
+    #[inline(always)]
     unsafe fn shrink(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        unsafe { kernel_allocator().shrink(ptr, old_layout, new_layout) }
+        unsafe { KernelAllocator::shrink(self, ptr, old_layout, new_layout) }
     }
 }

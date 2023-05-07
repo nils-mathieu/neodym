@@ -23,4 +23,4 @@ pub struct Process {
 /// # Safety
 ///
 /// * The kernel must be loaded in the process's address space in the normal higher half position.
-pub unsafe fn prepare(state: &mut Process) {}
+pub unsafe fn setup_process(_state: &mut Process) {}

@@ -6,6 +6,8 @@ use core::ptr::NonNull;
 
 use nd_spin::Mutex;
 
+use crate::arch::x86_64::PageAllocatorTok;
+
 use super::PAGE_SIZE;
 use super::{PageBox, PageList};
 
@@ -35,13 +37,9 @@ struct PageMeta {
 
 impl PageMeta {
     /// Creates a new [`PageMeta`].
-    ///
-    /// # Safety
-    ///
-    /// The global page allocator must've been initialized previously.
     #[inline(always)]
-    pub unsafe fn new() -> Result<Self, AllocError> {
-        let page = unsafe { PageBox::new_uninit()? };
+    pub fn new(page_allocator: PageAllocatorTok) -> Result<Self, AllocError> {
+        let page = PageBox::new_uninit(page_allocator)?;
         Ok(Self { page, state: 0 })
     }
 
@@ -264,7 +262,7 @@ unsafe fn allocate_in_list(
 
     // We couldn't find a page with enough free slot in the whole list.
     // We need to find a node with a free slot to store a new page.
-    let mut meta = unsafe { PageMeta::new()? };
+    let mut meta = PageMeta::new(list.page_allocator())?;
 
     // SAFETY:
     //  We just created the page, so we know that it's free.
@@ -335,14 +333,10 @@ pub struct PageBasedAllocator {
 
 impl PageBasedAllocator {
     /// Creates a new [`State`].
-    ///
-    /// # Safety
-    ///
-    /// The global page allocator must've been initialized previously.
     #[inline(always)]
-    pub const unsafe fn new() -> Self {
+    pub const fn new(page_allocator: PageAllocatorTok) -> Self {
         Self {
-            head: Mutex::new(PageList::new()),
+            head: Mutex::new(PageList::new(page_allocator)),
         }
     }
 }

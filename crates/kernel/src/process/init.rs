@@ -2,7 +2,7 @@
 //!
 //! This program is usually loaded as a kernel module by the bootloader.
 
-use crate::arch::x86_64::OutOfPhysicalMemory;
+use crate::arch::x86_64::{OutOfPhysicalMemory, PageAllocatorTok};
 use crate::process::Process;
 
 /// The virtual address at which the first userspace program is loaded.
@@ -19,7 +19,10 @@ pub const LOAD_ADDRESS: usize = 0x10_0000;
 /// The page allocator must be initialized.
 ///
 /// The scheduler must be initialized.
-pub unsafe fn load_init_program(file: &[u8]) -> Result<(), OutOfPhysicalMemory> {
+pub unsafe fn load_init_program(
+    page_allocator: PageAllocatorTok,
+    file: &[u8],
+) -> Result<(), OutOfPhysicalMemory> {
     nd_log::info!("Starting the `nd_init` program...");
 
     // The program must be loaded at the address `0x10_0000` (1 Mb), and its entry point is exactly
@@ -28,7 +31,9 @@ pub unsafe fn load_init_program(file: &[u8]) -> Result<(), OutOfPhysicalMemory> 
         #[cfg(target_arch = "x86_64")]
         x86_64: crate::arch::x86_64::Process {
             instruction_pointer: LOAD_ADDRESS as nd_x86_64::VirtAddr,
-            memory_mapper: unsafe { crate::arch::x86_64::MemoryMapper::new().unwrap() },
+            memory_mapper: unsafe {
+                crate::arch::x86_64::MemoryMapper::new(page_allocator).unwrap()
+            },
         },
     };
 
