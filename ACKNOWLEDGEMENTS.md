@@ -18,3 +18,5 @@ This project could not have been possible without the help of the following reso
 - [Application Performance and Flexibility on Exokernel Systems](https://pdos.csail.mit.edu/papers/exo-sosp97/exo-sosp97.html)
   by Frans Kaashoek, Dawson R. Engler, Gregory R. Ganger, Héctor M. Briceño, Russell Hunt, David
   Mazières, Thomas Pinckney, Robert Grimm, John Jannotti, and Kenneth Mackenzie
+- [The UNIX-HATERS Handbook](https://web.mit.edu/~simsong/www/ugh.pdf) by Simson Garfinkel,
+  Daniel Weise and Steven Strassmann.
