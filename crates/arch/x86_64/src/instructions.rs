@@ -115,7 +115,7 @@ pub unsafe fn rdmsr(port: u32) -> u64 {
     let low: u32;
     let high: u32;
     unsafe {
-        asm!("rdmsr", in("ecx") port, out("eax") low, out("edx") high, options(nostack, preserves_flags));
+        asm!("rdmsr", in("ecx") port, out("eax") low, out("edx") high, options(nomem, nostack, preserves_flags));
     }
     ((high as u64) << 32) | (low as u64)
 }
@@ -126,6 +126,6 @@ pub unsafe fn wrmsr(port: u32, value: u64) {
     let low = value as u32;
     let high = (value >> 32) as u32;
     unsafe {
-        asm!("wrmsr", in("ecx") port, in("eax") low, in("edx") high, options(nomem, nostack, preserves_flags));
+        asm!("wrmsr", in("ecx") port, in("eax") low, in("edx") high, options(nostack, preserves_flags));
     }
 }

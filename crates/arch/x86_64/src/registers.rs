@@ -552,7 +552,7 @@ pub unsafe fn set_lstar(lstar: VirtAddr) {
 bitflags! {
     /// A possible value of **INTEL**'s **IA32_EFER** register (Extended Feature Enable Register).
     #[derive(Debug, Clone, Copy)]
-    pub struct Ia32Efer: u64 {
+    pub struct Efer: u64 {
         /// Enables the `syscall` and `sysret` instructions, for compatibility with AMD
         /// processors.
         const SYSTEM_CALL_ENABLE = 1 << 0;
@@ -570,15 +570,15 @@ bitflags! {
 
 const IA32_EFER: u32 = 0xC000_0080;
 
-/// Returns the value of the **IA32_EFER** register.
+/// Returns the value of the **EFER** register.
 #[inline(always)]
-pub fn ia32_efer() -> Ia32Efer {
-    unsafe { Ia32Efer::from_bits_retain(crate::rdmsr(IA32_EFER)) }
+pub fn efer() -> Efer {
+    unsafe { Efer::from_bits_retain(crate::rdmsr(IA32_EFER)) }
 }
 
-/// Sets the value of the **IA32_EFER** register.
+/// Sets the value of the **EFER** register.
 #[inline(always)]
-pub unsafe fn set_ia32_efer(efer: Ia32Efer) {
+pub unsafe fn set_efer(efer: Efer) {
     unsafe {
         crate::wrmsr(IA32_EFER, efer.bits());
     }

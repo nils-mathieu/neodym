@@ -1,7 +1,7 @@
 use core::mem::size_of_val;
 
 use nd_x86_64::{
-    DescriptorTable, GateDescriptor, GateType, Ia32Efer, Idt, IstIndex, PrivilegeLevel,
+    DescriptorTable, Efer, GateDescriptor, GateType, Idt, IstIndex, PrivilegeLevel,
     SegmentDescriptor, SegmentSelector, Star, TablePtr, Tss, VirtAddr,
 };
 
@@ -79,8 +79,8 @@ pub unsafe fn initialize_tables() {
 
         GDT.kernel_code = SegmentDescriptor::code(true, PrivilegeLevel::Ring0, false, true);
         GDT.kernel_data = SegmentDescriptor::data(true, PrivilegeLevel::Ring0, false, true);
-        GDT.user_code = SegmentDescriptor::code(true, PrivilegeLevel::Ring3, false, true);
         GDT.user_data = SegmentDescriptor::data(true, PrivilegeLevel::Ring3, false, true);
+        GDT.user_code = SegmentDescriptor::code(true, PrivilegeLevel::Ring3, false, true);
         GDT.tss = SegmentDescriptor::tss(
             true,
             PrivilegeLevel::Ring0,
@@ -187,7 +187,7 @@ pub unsafe fn initialize_tables() {
         // Initialize the system calls handler.
         nd_log::trace!("Setting up system calls...");
 
-        nd_x86_64::set_ia32_efer(nd_x86_64::ia32_efer() | Ia32Efer::SYSTEM_CALL_ENABLE);
+        nd_x86_64::set_efer(nd_x86_64::efer() | Efer::SYSTEM_CALL_ENABLE);
         nd_x86_64::set_star(Star::new(
             SegmentSelector::new(2, DescriptorTable::Gdt, PrivilegeLevel::Ring3),
             SegmentSelector::new(1, DescriptorTable::Gdt, PrivilegeLevel::Ring0),
