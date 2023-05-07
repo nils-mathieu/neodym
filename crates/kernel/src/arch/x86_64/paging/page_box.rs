@@ -22,16 +22,18 @@ unsafe impl<T: ?Sized + Send> Send for PageBox<T> {}
 unsafe impl<T: ?Sized + Sync> Sync for PageBox<T> {}
 
 impl<T> PageBox<T> {
-    const _SIZE_CHECK: () = assert!(size_of::<T>() <= PAGE_SIZE);
-    const _ALIGN_CHECK: () = assert!(align_of::<T>() % PAGE_SIZE == 0);
-
     /// Allocates a new [`PageBox`] using the global page allocator.
     ///
     /// # Errors
     ///
     /// This function fails if the system is out of physical memory.
     #[inline]
+    #[track_caller]
     pub fn new(value: T, page_allocator: PageAllocatorTok) -> Result<Self, T> {
+        // Those asserts will be removed by the compiler if they pass.
+        assert!(size_of::<T>() <= PAGE_SIZE);
+        assert!(align_of::<T>() <= PAGE_SIZE);
+
         let page = match unsafe { create_box(page_allocator) } {
             Ok(p) => p.cast::<T>(),
             Err(_) => return Err(value),
@@ -47,6 +49,7 @@ impl<T> PageBox<T> {
     }
 
     /// Returns the value stored in this [`PageBox`].
+    #[inline(always)]
     pub fn into_inner(b: Self) -> T {
         let this = ManuallyDrop::new(b);
         let ret = unsafe { core::ptr::read(this.page.as_ptr()) };

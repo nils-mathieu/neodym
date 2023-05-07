@@ -89,6 +89,51 @@ impl PageAllocator {
         self.info
     }
 
+    /// Attempts to allocate a contiguous region of physical memory.
+    ///
+    /// Note that this function may fail even if there is enough free memory available. Even
+    /// contigous! This function only checks the "segment" list, and works if the current
+    /// segment has enough free pages. If the current segment doesn't have enough free pages,
+    /// this function will simply fail.
+    pub fn allocate_contiguous(&self, count: u64) -> Result<PhysAddr, OutOfPhysicalMemory> {
+        // The index of the page that will be allocated.
+        //
+        // Relaxed ordering is sufficient here because we only care about the order of the
+        // operations on this specific atomic variable. If another threads attempts to allocate
+        // a page, their operation will be ordered with respect to this one, and we don't really
+        // care if it happens before or after.
+        let mut page_index = self.next_free.fetch_add(1, Relaxed) as u64;
+
+        // This executes in O(n), with n being the number of segments.
+        // This is fine, as we don't expect to have more than `MAX_SEGMENT_COUNT` segments. It will
+        // usually be 4 to 8 segments.
+        for segment in &self.segments {
+            let page_count = segment.length / 4096;
+
+            if page_index < page_count && page_index + count <= page_count {
+                // We found the right segment!
+                return Ok(segment.base + page_index * 4096);
+            }
+
+            page_index -= page_count;
+            // not in this segment
+        }
+
+        // This races with the `fetch_add` above, but if other threads are able to allocate enough
+        // pages to overflow an `usize` by the time we get here, then the system is probably having
+        // bigger issues than this.
+        //
+        // If `next_free` overflows, then used segments will start being allocated again. This is
+        // actually pretty bad, but there's not much we can do about it without using a lock.
+        //
+        // I think locking would actually be fine, but it's so unlikely that this will be an issue
+        // that the lock-free implementation is probably worth it.
+        self.next_free.store(page_index as usize, Relaxed);
+
+        // We're out of memory :(
+        Err(OutOfPhysicalMemory)
+    }
+
     /// Allocates a new physical page.
     ///
     /// The returned physical address is guaranteed to be page-aligned.
@@ -121,42 +166,7 @@ impl PageAllocator {
         //  pages, then either we're out of memory (or close to it), or we still have a lot of
         //  memory available in the usable segments.
 
-        // The index of the page that will be allocated.
-        //
-        // Relaxed ordering is sufficient here because we only care about the order of the
-        // operations on this specific atomic variable. If another threads attempts to allocate
-        // a page, their operation will be ordered with respect to this one, and we don't really
-        // care if it happens before or after.
-        let mut page_index = self.next_free.fetch_add(1, Relaxed) as u64;
-
-        // This executes in O(n), with n being the number of segments.
-        // This is fine, as we don't expect to have more than `MAX_SEGMENT_COUNT` segments. It will
-        // usually be 4 to 8 segments.
-        for segment in &self.segments {
-            let page_count = segment.length / 4096;
-
-            if page_index < page_count {
-                // We found the right segment!
-                return Ok(segment.base + page_index * 4096);
-            }
-
-            page_index -= page_count;
-            // not in this segment
-        }
-
-        // This races with the `fetch_add` above, but if other threads are able to allocate enough
-        // pages to overflow an `usize` by the time we get here, then the system is probably having
-        // bigger issues than this.
-        //
-        // If `next_free` overflows, then used segments will start being allocated again. This is
-        // actually pretty bad, but there's not much we can do about it without using a lock.
-        //
-        // I think locking would actually be fine, but it's so unlikely that this will be an issue
-        // that the lock-free implementation is probably worth it.
-        self.next_free.store(page_index as usize, Relaxed);
-
-        // We're out of memory :(
-        Err(OutOfPhysicalMemory)
+        self.allocate_contiguous(1)
     }
 
     /// Deallocates a physical address.

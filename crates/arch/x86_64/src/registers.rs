@@ -9,12 +9,38 @@ use core::fmt;
 
 /// Returns the current value of the stack pointer.
 #[inline(always)]
-pub fn rsp() -> u64 {
+pub fn rsp() -> VirtAddr {
     let rsp: u64;
     unsafe {
         asm!("mov {}, rsp", out(reg) rsp, options(nostack, nomem, preserves_flags));
     }
     rsp
+}
+
+/// Sets the value of the **RSP** register.
+#[inline(always)]
+pub unsafe fn set_rsp(rsp: VirtAddr) {
+    unsafe {
+        asm!("mov rsp, {}", in(reg) rsp, options(nomem, preserves_flags));
+    }
+}
+
+/// Returns the value of the stack base pointer.
+#[inline(always)]
+pub fn rbp() -> VirtAddr {
+    let rbp: u64;
+    unsafe {
+        asm!("mov {}, rbp", out(reg) rbp, options(nostack, nomem, preserves_flags));
+    }
+    rbp
+}
+
+/// Sets the value of the **RBP** register.
+#[inline(always)]
+pub unsafe fn set_rbp(rbp: VirtAddr) {
+    unsafe {
+        asm!("mov rbp, {}", in(reg) rbp, options(nomem, preserves_flags));
+    }
 }
 
 /// Returns the current value of the instruction pointer.

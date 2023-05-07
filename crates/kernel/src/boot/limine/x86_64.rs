@@ -17,21 +17,13 @@ use super::{BOOTLOADER_INFO, HHDM, KERNEL_ADDR, MEMORY_MAP};
 pub extern "C" fn entry_point() -> ! {
     // SAFETY:
     //  We're in the entry point, this function won't be called ever again.
-    unsafe {
-        crate::arch::x86_64::initialize_logger();
-        crate::arch::x86_64::initialize_tables();
-    }
+    unsafe { crate::arch::x86_64::initialize_logger() };
 
     if let Some(info) = BOOTLOADER_INFO.response() {
         nd_log::info!("Loaded by '{}' (v{})!", info.name(), info.version());
     } else {
         nd_log::info!("Loaded by a Limine-compliant bootloader.");
     }
-
-    let Some(memmap) = MEMORY_MAP.response() else {
-        nd_log::error!("The Limine bootloader did not provide a map of the usable memory.");
-        crate::arch::die();
-    };
 
     let Some(kernel_addr) = KERNEL_ADDR.response() else {
         nd_log::error!("The Limine bootloader did not provide the address of the kernel.");
@@ -42,6 +34,39 @@ pub extern "C" fn entry_point() -> ! {
         nd_log::error!("The Limine bootloader did not provide the HHDM offset.");
         crate::arch::die();
     };
+
+    // Initialize some global systems required by the kernel's system and some interrupt
+    // handlers, such as the page allocator, local APICs, etc.
+    //
+    // When we have support for multiple CPUs, initialization code will come here.
+    let kernel_info = unsafe {
+        KernelInfoTok::initialize(KernelInfo {
+            kernel_phys_addr: kernel_addr.physical_base(),
+            kernel_virt_addr: kernel_addr.virtual_base(),
+            kernel_size: crate::image_size(),
+            hhdm_offset: hhdm.offset(),
+        })
+    };
+
+    let Some(memmap) = MEMORY_MAP.response() else {
+        nd_log::error!("The Limine bootloader did not provide a map of the usable memory.");
+        crate::arch::die();
+    };
+
+    // Bootloader reclaimable memory and useable memory segments can be used by the kernel.
+    let mut available_memory = memmap
+        .entries()
+        .iter()
+        .filter(|e| matches!(e.ty(), MemMapEntryType::USABLE))
+        .map(|e| MemorySegment {
+            base: e.base(),
+            length: e.length(),
+        });
+
+    let page_allocator =
+        unsafe { PageAllocatorTok::initialize(kernel_info, &mut available_memory) };
+
+    unsafe { crate::arch::x86_64::initialize_tables() };
 
     // Load the initial program.
     let Some(nd_init) = find_init_program() else {
@@ -57,35 +82,11 @@ pub extern "C" fn entry_point() -> ! {
         crate::arch::die();
     };
 
-    // Bootloader reclaimable memory and useable memory segments can be used by the kernel.
-    let mut available_memory = memmap
-        .entries()
-        .iter()
-        .filter(|e| matches!(e.ty(), MemMapEntryType::USABLE))
-        .map(|e| MemorySegment {
-            base: e.base(),
-            length: e.length(),
-        });
-
-    let page_allocator = unsafe {
-        // Initialize some global systems required by the kernel's system and some interrupt
-        // handlers, such as the page allocator, local APICs, etc.
-        //
-        // When we have support for multiple CPUs, initialization code will come here.
-        let info = KernelInfoTok::initialize(KernelInfo {
-            kernel_phys_addr: kernel_addr.physical_base(),
-            kernel_virt_addr: kernel_addr.virtual_base(),
-            kernel_size: crate::image_size(),
-            hhdm_offset: hhdm.offset(),
-        });
-
-        let page_allocator = PageAllocatorTok::initialize(info, &mut available_memory);
+    unsafe {
         crate::arch::x86_64::initialize_lapic();
 
         // Enable interrupts. We're ready to be interrupted x).
         nd_x86_64::sti();
-
-        page_allocator
     };
 
     match spawn_nd_init(page_allocator, nd_init.data()) {

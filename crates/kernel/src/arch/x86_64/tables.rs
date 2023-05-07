@@ -1,3 +1,5 @@
+use core::mem::size_of_val;
+
 use nd_x86_64::{
     DescriptorTable, GateDescriptor, GateType, Ia32Efer, Idt, IstIndex, PrivilegeLevel,
     SegmentDescriptor, SegmentSelector, Star, TablePtr, Tss, VirtAddr,
@@ -35,13 +37,13 @@ impl Gdt {
     }
 }
 
+/// The stack that will be used by the kernel.
+static mut KERNEL_STACK: [u8; 4096 * 4] = [0u8; 4096 * 4];
+
 /// The stack that will be used when a double fault occurs. This is required because a double
 /// fault might occur because of a stack overflow, and in that case, the kernel stack would be
 /// unusable.
-static mut DOUBLE_FAULT_STACK: [u8; 4096 * 4] = [0u8; 4096 * 4];
-
-/// The stack to jump to when going from userspace to kernelspace.
-static mut KERNEL_STACK: [u8; 4096 * 4] = [0u8; 4096 * 4];
+static mut DOUBLE_FAULT_STACK: [u8; 4096 * 2] = [0u8; 4096 * 2];
 
 /// The task state segment.
 static mut TSS: Tss = Tss::new();
@@ -66,11 +68,13 @@ pub unsafe fn initialize_tables() {
         nd_log::trace!("Setting up the GDT...");
         TSS.set_interrupt_stack(
             IstIndex::One,
-            DOUBLE_FAULT_STACK.as_ptr().add(DOUBLE_FAULT_STACK.len()) as usize as VirtAddr,
+            DOUBLE_FAULT_STACK
+                .as_ptr()
+                .add(size_of_val(&DOUBLE_FAULT_STACK)) as usize as VirtAddr,
         );
         TSS.set_stack_pointer(
             PrivilegeLevel::Ring0,
-            KERNEL_STACK.as_ptr().add(KERNEL_STACK.len()) as usize as VirtAddr,
+            KERNEL_STACK.as_ptr().add(size_of_val(&KERNEL_STACK)) as usize as VirtAddr,
         );
 
         GDT.kernel_code = SegmentDescriptor::code(true, PrivilegeLevel::Ring0, false, true);
