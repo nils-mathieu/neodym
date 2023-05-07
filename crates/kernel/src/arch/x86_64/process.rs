@@ -6,6 +6,21 @@ use super::MemoryMapper;
 pub struct Process {
     /// The memory mapper used to allocate memory pages to the process.
     pub memory_mapper: MemoryMapper,
-    /// The instruction pointer of the process, within its own address space.
+    /// The saved instruction pointer of the process, within its own address space. Note that this
+    /// value isn't updated in real-time.
     pub instruction_pointer: VirtAddr,
 }
+
+/// Initializes the provided userspace process to be spawned. This is the initialization function
+/// for the **x86_64** architecture.
+///
+/// # Steps
+///
+/// 1. Map the kernel in the process's address space.
+///
+/// 2. Switch the address space to the process's address space.
+///
+/// # Safety
+///
+/// * The kernel must be loaded in the process's address space in the normal higher half position.
+pub unsafe fn prepare(state: &mut Process) {}

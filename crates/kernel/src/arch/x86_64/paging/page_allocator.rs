@@ -2,7 +2,7 @@ use core::alloc::AllocError;
 use core::fmt;
 use core::mem::{size_of, MaybeUninit};
 use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
-use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize};
+use core::sync::atomic::{AtomicPtr, AtomicUsize};
 
 use nd_array::Vec;
 use nd_spin::Mutex;
@@ -71,33 +71,11 @@ pub struct PageAllocator {
     next_free: AtomicUsize,
     /// The list of free pages.
     free_pages: AtomicPtr<FreePageListNode>,
-    /// The offset of the *Higher Half Direct Map*.
-    ///
-    /// The higher half direct map is a direct mapping of the physical memory at the top of the
-    /// address space.
-    higher_half_direct_map: VirtAddr,
 }
 
 impl PageAllocator {
     /// The maximum number of segments that can be managed by the page allocator.
     pub const MAX_SEGMENT_COUNT: usize = 16;
-
-    /// Converts a virtual address to a physical address.
-    ///
-    /// # Correctness
-    ///
-    /// This function assumes that the provided virtual address is part of the higher half direct
-    /// map.
-    #[inline(always)]
-    pub fn virtual_to_physical(&self, virt: VirtAddr) -> PhysAddr {
-        virt - self.higher_half_direct_map
-    }
-
-    /// Converts a physical address to a virtual address.
-    #[inline(always)]
-    pub fn physical_to_virtual(&self, phys: PhysAddr) -> VirtAddr {
-        phys + self.higher_half_direct_map
-    }
 
     /// Allocates a new physical page.
     ///
@@ -190,9 +168,11 @@ impl PageAllocator {
             cur = &node.next;
         }
 
+        let info = unsafe { crate::arch::x86_64::kernel_info() };
+
         // We got to the end of the free list, and we didn't find a node that can store our
         // new page. We need to allocate a new node. We'll use the deallocated node for this.
-        let page_node_ptr = self.physical_to_virtual(addr) as *mut FreePageListNode;
+        let page_node_ptr = (addr + info.hhdm_offset) as *mut FreePageListNode;
 
         unsafe { page_node_ptr.write(FreePageListNode::new()) };
 
@@ -245,17 +225,6 @@ fn human_bytes(bytes: u64) -> impl fmt::Display {
 /// The global page allocator.
 static mut PAGE_ALLOCATOR: MaybeUninit<PageAllocator> = MaybeUninit::uninit();
 
-/// Tracks whether the global page allocator has been initialized.
-#[cfg(debug_assertions)]
-static PAGE_ALLOCATOR_INITIALIZED: AtomicBool = AtomicBool::new(false);
-
-/// Returns whether the global page allocator has been initialized.
-#[cfg(debug_assertions)]
-#[inline(always)]
-fn is_initialized() -> bool {
-    PAGE_ALLOCATOR_INITIALIZED.load(Acquire)
-}
-
 /// Returns the global page allocator.
 ///
 /// # Safety
@@ -267,12 +236,6 @@ fn is_initialized() -> bool {
 /// In debug builds, this function panics if the page allocator has not been initialized.
 #[inline(always)]
 pub unsafe fn page_allocator() -> &'static PageAllocator {
-    #[cfg(debug_assertions)]
-    assert!(
-        is_initialized(),
-        "The page allocator has not been initialized."
-    );
-
     // SAFETY:
     //  The caller must make sure that the page allocator has been initialized.
     unsafe { PAGE_ALLOCATOR.assume_init_ref() }
@@ -289,6 +252,8 @@ pub unsafe fn page_allocator() -> &'static PageAllocator {
 ///
 /// # Safety
 ///
+/// The kernel info structure must've been initialized.
+///
 /// This function expects to be called only once.
 ///
 /// Note that this function will take ownership of all provided useable memory regions. This means
@@ -301,16 +266,7 @@ pub unsafe fn page_allocator() -> &'static PageAllocator {
 /// page allocator. Accessing it outside of the module will trigger undefined behavior.
 ///
 /// A higher-half direct map must be set up at `hhdm`.
-pub unsafe fn initialize_page_allocator(
-    usable: &mut dyn Iterator<Item = MemorySegment>,
-    hhdm: VirtAddr,
-) {
-    #[cfg(debug_assertions)]
-    assert!(
-        !is_initialized(),
-        "The page allocator has already been initialized."
-    );
-
+pub unsafe fn initialize_page_allocator(usable: &mut dyn Iterator<Item = MemorySegment>) {
     nd_log::trace!("Initializing the page allocator...");
 
     let mut segments = Vec::<MemorySegment, { PageAllocator::MAX_SEGMENT_COUNT }>::new();
@@ -353,10 +309,6 @@ pub unsafe fn initialize_page_allocator(
             segments,
             next_free: AtomicUsize::new(0),
             free_pages: AtomicPtr::new(core::ptr::null_mut()),
-            higher_half_direct_map: hhdm,
         });
     }
-
-    #[cfg(debug_assertions)]
-    PAGE_ALLOCATOR_INITIALIZED.store(true, Release);
 }

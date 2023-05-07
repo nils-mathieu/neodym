@@ -3,10 +3,11 @@
 
 use nd_limine::limine_reqs;
 use nd_limine::{
-    BootloaderInfo, EntryPoint, File, Hhdm, MemMapEntryType, MemoryMap, Module, Request,
+    BootloaderInfo, EntryPoint, File, Hhdm, KernelAddress, MemMapEntryType, MemoryMap, Module,
+    Request,
 };
 
-use crate::arch::x86_64::{MemorySegment, OutOfPhysicalMemory};
+use crate::arch::x86_64::{KernelInfo, MemorySegment, OutOfPhysicalMemory};
 
 /// Requests the bootloader to provide information about itself, such as its name and version.
 /// Those information will be logged at startup.
@@ -24,13 +25,23 @@ static MODULE: Request<Module> = Request::new(Module::new(&[]));
 /// Requests the Limine bootloader to provide a map of the available physical memory.
 static MEMORY_MAP: Request<MemoryMap> = Request::new(MemoryMap);
 
+/// Requests the Limine bootloader to provide the address of the kernel in physical memory.
+static KERNEL_ADDR: Request<KernelAddress> = Request::new(KernelAddress);
+
 /// The Limine bootloader maps the entierty of the physical memory to the higher half of the
 /// virtual address space.
 ///
 /// This request provides the address of th *Higher Half Direct Map* offset.
 static HHDM: Request<Hhdm> = Request::new(Hhdm);
 
-limine_reqs!(MEMORY_MAP, BOOTLOADER_INFO, MODULE, ENTRY_POINT, HHDM);
+limine_reqs!(
+    MEMORY_MAP,
+    BOOTLOADER_INFO,
+    MODULE,
+    ENTRY_POINT,
+    HHDM,
+    KERNEL_ADDR
+);
 
 /// Removes the begining of a path, only keeping the what's after the last `/` character.
 fn get_filename(bytes: &[u8]) -> &[u8] {
@@ -76,6 +87,25 @@ extern "C" fn entry_point() -> ! {
         crate::arch::x86_64::initialize_tables();
     }
 
+    let Some(kernel_addr) = KERNEL_ADDR.response() else {
+        nd_log::error!("The Limine bootloader did not provide the address of the kernel.");
+        crate::arch::die();
+    };
+
+    let Some(hhdm) = HHDM.response() else {
+        nd_log::error!("The Limine bootloader did not provide the HHDM offset.");
+        crate::arch::die();
+    };
+
+    #[cfg(target_arch = "x86_64")]
+    unsafe {
+        crate::arch::x86_64::initialize_kernel_info(KernelInfo {
+            kernel_addr: kernel_addr.physical_base(),
+            kernel_size: 0,
+            hhdm_offset: hhdm.offset(),
+        });
+    }
+
     if let Some(info) = BOOTLOADER_INFO.response() {
         nd_log::info!("Loaded by '{}' (v{})!", info.name(), info.version());
     } else {
@@ -84,11 +114,6 @@ extern "C" fn entry_point() -> ! {
 
     let Some(memmap) = MEMORY_MAP.response() else {
         nd_log::error!("The Limine bootloader did not provide a map of the usable memory.");
-        crate::arch::die();
-    };
-
-    let Some(hhdm) = HHDM.response() else {
-        nd_log::error!("The Limine bootloader did not provide the HHDM offset.");
         crate::arch::die();
     };
 
@@ -122,7 +147,7 @@ extern "C" fn entry_point() -> ! {
     //  four gigabytes, ensuring that the page tables are properly identity mapped.
     #[cfg(target_arch = "x86_64")]
     unsafe {
-        crate::arch::x86_64::initialize_page_allocator(&mut available_memory, hhdm.offset());
+        crate::arch::x86_64::initialize_page_allocator(&mut available_memory);
         crate::arch::x86_64::initialize_lapic();
         nd_x86_64::sti();
     }

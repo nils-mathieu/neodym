@@ -77,6 +77,7 @@ impl<T> PageBox<MaybeUninit<T>> {
 unsafe fn create_box() -> Result<NonNull<u8>, OutOfPhysicalMemory> {
     #[cfg(target_arch = "x86_64")]
     {
+        let info = unsafe { crate::arch::x86_64::kernel_info() };
         let allocator = unsafe { crate::arch::x86_64::page_allocator() };
 
         // SAFETY:
@@ -86,7 +87,7 @@ unsafe fn create_box() -> Result<NonNull<u8>, OutOfPhysicalMemory> {
 
         // SAFETY:
         //  We know that the page allocator has provided a valid physical address.
-        let virt_addr = allocator.physical_to_virtual(addr) as *mut u8;
+        let virt_addr = (addr + info.hhdm_offset) as *mut u8;
 
         unsafe { Ok(NonNull::new_unchecked(virt_addr)) }
     }
@@ -126,11 +127,12 @@ unsafe fn destroy_box(page: NonNull<u8>) {
         //  If the `PageBox` could be created, we know that the page allocator has been
         //  initialized. This means that we can safely call `page_allocator()`.
         let page_allocator = crate::arch::x86_64::page_allocator();
+        let info = crate::arch::x86_64::kernel_info();
 
         // SAFETY:
         //  We know that we kept a valid virtual address to the page, so we can safely convert it
         //  back to a physical address.
-        let phys_addr = page_allocator.virtual_to_physical(page.as_ptr() as usize as u64);
+        let phys_addr = page.as_ptr() as usize as nd_x86_64::VirtAddr - info.hhdm_offset;
 
         crate::arch::x86_64::page_allocator().deallocate(phys_addr);
     }
