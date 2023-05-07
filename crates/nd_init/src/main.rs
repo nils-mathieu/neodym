@@ -10,8 +10,6 @@ use core::panic::PanicInfo;
 /// This function is called on panic.
 #[panic_handler]
 fn handle_panic(_info: &PanicInfo) -> ! {
-    // TODO:
-    //  Exit the process properly.
     neodym_sys::terminate_self();
 }
 
