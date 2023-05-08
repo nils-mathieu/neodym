@@ -9,6 +9,8 @@ use crate::arch::x86_64::{OutOfPhysicalMemory, PageAllocatorTok};
 use super::PAGE_SIZE;
 
 /// A memory page allocated by the global page allocator.
+///
+/// This type uses RAII to automatically deallocate the page when it is dropped.
 pub struct PageBox<T: ?Sized> {
     page: NonNull<T>,
 

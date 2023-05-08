@@ -54,6 +54,7 @@ pub unsafe fn initialize_logger() {
 }
 
 /// Represents the output serial port.
+#[derive(Clone, Copy)]
 struct SerialOut {
     _private: (),
 }
@@ -105,12 +106,12 @@ impl SerialOut {
 
     /// Returns whether the transmition buffer is currently empty.
     #[inline(always)]
-    pub fn is_transmit_empty(&self) -> bool {
+    pub fn is_transmit_empty(self) -> bool {
         unsafe { inb(Self::COM1 + 5) & 0x20 != 0 }
     }
 
     /// Writes a specific byte to the output port.
-    pub fn write_byte(&mut self, byte: u8) {
+    pub fn write_byte(self, byte: u8) {
         while !self.is_transmit_empty() {
             core::hint::spin_loop();
         }

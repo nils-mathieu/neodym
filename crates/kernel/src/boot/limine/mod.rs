@@ -1,5 +1,8 @@
 //! The entry point of the kernel, when booted by the
 //! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md) bootloader.
+//!
+//! Because the Limine bootloader supports two different architectures, their respective entry
+//! points are defined in the [`x86_64`] and `aarch64` (not yet implemented) modules.
 
 use nd_limine::limine_reqs;
 use nd_limine::{

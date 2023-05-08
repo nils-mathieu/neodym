@@ -1,5 +1,7 @@
 use core::arch::asm;
 
+use neodym_sys_common::{SysResult, SystemCall};
+
 /// This function is called when the `syscall` instruction is executed in userland.
 ///
 /// # Arguments
@@ -36,6 +38,12 @@ pub unsafe extern "C" fn handle_syscall() -> usize {
     }
 }
 
+/// The Rust function responsible for handling system calls. This function is called by the
+/// assembly function [`handle_syscall`].
+///
+/// The system call number is taken as the third parameter (ecx) because that's the first register
+/// that is clobbered by the `syscall` instruction. Other registers are already properly setup by
+/// the caller (in userspace).
 #[inline(always)] // no sure whether the compiler can inline this. it would be nice.
 #[no_mangle]
 extern "C" fn nd_handle_syscall_inner(
@@ -43,6 +51,14 @@ extern "C" fn nd_handle_syscall_inner(
     _arg1: usize,
     _arg2: usize,
     no: usize,
-) -> usize {
-    todo!("Implement system calls (no = {})", no);
+) -> SysResult {
+    let Some(sysno) = SystemCall::from_usize(no) else {
+        todo!("support invalid system calls");
+    };
+
+    match sysno {
+        SystemCall::TerminateSelf => {
+            todo!("implement the TerminateSelf system call");
+        }
+    }
 }

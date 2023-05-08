@@ -26,3 +26,5 @@ fn terminate_self() -> !;
 The `TerminateSelf` system call terminates the current process.
 
 This system call never actually returns to the caller, as the process is terminated.
+
+Not yet implemented.

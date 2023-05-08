@@ -64,6 +64,8 @@ impl FreePageListNode {
 /// Contains the state of the physical memory allocator.
 ///
 /// This structure may be used to find free physical memory regions.
+///
+/// This type is normally accessed through the [`PageAllocatorTok`] token type.
 pub struct PageAllocator {
     /// A list of all usable memory segments.
     segments: Vec<MemorySegment, { Self::MAX_SEGMENT_COUNT }>,
@@ -81,6 +83,8 @@ pub struct PageAllocator {
 
 impl PageAllocator {
     /// The maximum number of segments that can be managed by the page allocator.
+    ///
+    /// There normally won't be more than 4 to 8 segments. So 16 is a very safe number.
     pub const MAX_SEGMENT_COUNT: usize = 16;
 
     /// Returns a token proving that the global kernel info structure has been initialized.

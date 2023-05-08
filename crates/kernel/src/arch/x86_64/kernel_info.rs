@@ -4,6 +4,8 @@ use core::ops::Deref;
 use nd_x86_64::{PhysAddr, VirtAddr};
 
 /// Stores information about the kernel, relevant to the `x86_64` architecture.
+///
+/// This type is normally accessed through the [`KernelInfoTok`] token type.
 pub struct KernelInfo {
     /// The starting address of the higher half direct map in the kernel's address space.
     ///

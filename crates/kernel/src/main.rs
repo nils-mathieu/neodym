@@ -12,6 +12,11 @@
 //! Those two modules are different because some bootloaders (such as
 //! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md)) may support
 //! multiple CPU architectures.
+//!
+//! After we've finished initializing the CPU in a well-known state, we can start the first program
+//! of the kernel. This program must be loaded as a kernel module (as we don't know what a file
+//! system is). This module will be loaded by the kernel at a specific virtual address (0x10000)
+//! before being executed.
 
 #![no_std]
 #![no_main]

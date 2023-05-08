@@ -61,9 +61,11 @@ impl DerefMut for MemoryMapperEntry {
 /// [`MemoryMapper`] is dropped.
 const OWNED: PageTableFlags = PageTableFlags::USER_0;
 
-/// Allocates automatically page tables for custom mappings.
+/// Represents an address space (of a userspace process for example).
 ///
-/// This is used to manage the memory mapping of processes.
+/// This type provides multiple convenience methods to interact with an owned page table. Creating
+/// new pages, mapping them, etc. Note that by default, created pages are owned by the mapper, and
+/// will be deallocated when the mapper is dropped.
 ///
 /// # Conditional Ownership
 ///
