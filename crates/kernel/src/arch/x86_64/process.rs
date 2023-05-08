@@ -4,8 +4,8 @@ use nd_x86_64::VirtAddr;
 
 use super::{MappingError, MemoryMapper, OutOfPhysicalMemory};
 
-/// The part of a process's metadata that's specific to the **x86_64** architecture.
-pub struct Process {
+/// Information about a process which may be spawned.
+pub struct ProcessInfo {
     /// The memory mapper used to allocate memory pages to the process.
     pub memory_mapper: MemoryMapper,
     /// The saved instruction pointer of the process, within its own address space. Note that this
@@ -25,7 +25,7 @@ pub struct Process {
 /// 2. Switch the address space to the process's address space.
 ///
 /// 3. Use SYSRET to jump to the process's entry point in userspace.
-pub fn spawn(mut state: Process) -> Result<(), OutOfPhysicalMemory> {
+pub fn spawn(mut state: ProcessInfo) -> Result<(), OutOfPhysicalMemory> {
     // Map the kernel into the process's address space.
     match state.memory_mapper.map_kernel() {
         Ok(()) => {}

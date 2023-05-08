@@ -7,7 +7,7 @@ use nd_x86_64::{PageTableFlags, VirtAddr};
 
 use crate::arch::x86_64::{
     KernelInfo, KernelInfoTok, MappingError, MemoryMapper, MemorySegment, OutOfPhysicalMemory,
-    PageAllocatorTok, Process,
+    PageAllocatorTok, ProcessInfo,
 };
 
 use super::find_init_program;
@@ -120,7 +120,7 @@ fn spawn_nd_init(page_allocator: PageAllocatorTok, data: &[u8]) -> Result<(), Ou
 
     nd_log::trace!("Loading the `nd_init` program...");
 
-    let mut process = Process {
+    let mut process = ProcessInfo {
         instruction_pointer: LOADED_AT,
         memory_mapper: MemoryMapper::new(page_allocator)?,
         stack_pointer: STACK_BASE,
