@@ -14,8 +14,9 @@ returned to the process indicating that it does not have the necessary permissio
 
 ### Permissions
 
-- `MapMemory` allows a process to map physical memory to its virtual address space using the
-  [`MapMemory`](system_calls.md#MapMemory) system call.
+- `Terminate(ProcessHandle)` allows a process to terminate another (specific) process.
+- `MapMemoryOf(ProcessHandle)` allows a process to map physical memory to another (specific)
+  process.
 
 ## Resources
 
@@ -25,5 +26,6 @@ abstractions over resources which processes can use.
 
 ### Physical Memory
 
-Physical memory is allocated and deallocate with the `MemoryInsert` system call. This system call
-allows a process to insert a page table entry, and thus allocate a page of physical memory.
+Physical memory is allocated and deallocate with the [`MapMemory`](system_calls.md#mapmemory)
+system call. This system call allows a process to insert a page table entry, and thus allocate a
+page of physical memory.

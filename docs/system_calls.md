@@ -17,10 +17,10 @@ passed in the `rax` register, and the arguments are passed to `rdi`, `rsi` and `
 
 The return value is stored in `rax`.
 
-| Mnemonic                | `rax` | `rdi`   | `rsi` | `rdx` |
-| ----------------------- | ----- | ------- | ----- | ----- |
-| [Terminate](#Terminate) | 0     | process |       |       |
-| [MapMemory](#MapMemory) | 1     | process | pages | count |
+| Mnemonic                | `rax` | `rdi`   | `rsi`   | `rdx` |
+| ----------------------- | ----- | ------- | ------- | ----- |
+| [Terminate](#Terminate) | 0     | process |         |       |
+| [MapMemory](#MapMemory) | 1     | process | entries | count |
 
 ### Terminate
 
