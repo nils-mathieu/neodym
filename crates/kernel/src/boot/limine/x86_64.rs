@@ -123,60 +123,31 @@ fn spawn_nd_init(page_allocator: PageAllocatorTok, data: &[u8]) -> Result<(), Ou
     };
 
     // Map the process itself into its address space.
-
-    let mut remainder = data;
-    let mut virt_addr = LOADED_AT;
-
-    while !remainder.is_empty() {
-        let to_copy = core::cmp::min(0x1000, remainder.len());
-
-        match process.memory_mapper.allocate_mapping(
-            virt_addr,
-            PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT,
-        ) {
-            Ok(page) => {
-                // Copy the memory into the process's address space.
-                unsafe {
-                    core::ptr::copy_nonoverlapping(
-                        remainder.as_ptr(),
-                        page.kernel_virtual_address() as usize as *mut u8,
-                        to_copy,
-                    );
-                }
-            }
-            Err(MappingError::OutOfPhysicalMemory) => return Err(OutOfPhysicalMemory),
-            Err(MappingError::AlreadyMapped(_)) => {
-                debug_assert!(false, "nothing should be mapped here...");
-                unsafe { core::hint::unreachable_unchecked() };
-            }
+    match process.memory_mapper.load_at(
+        data,
+        LOADED_AT,
+        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT,
+    ) {
+        Ok(()) => (),
+        Err(MappingError::OutOfPhysicalMemory) => return Err(OutOfPhysicalMemory),
+        Err(MappingError::AlreadyMapped(_)) => {
+            debug_assert!(false, "nothing should be mapped here...");
+            unsafe { core::hint::unreachable_unchecked() };
         }
-
-        // SAFETY:
-        //  `to_copy` has been constructed such that is is always smaller or equal to the
-        //  length of `remainder`.
-        remainder = unsafe { remainder.get_unchecked(to_copy..) };
-        virt_addr += 0x1000;
     }
 
-    // Setup 64 kib of stack for the process.
-    let mut remaining = STACK_SIZE_IN_PAGES;
-    // Minus one to keep a page between the stack and the program. That the guard page.
-    let mut virt_addr = STACK_BASE - STACK_SIZE_IN_PAGES * 0x1000;
-    while remaining != 0 {
-        match process.memory_mapper.allocate_mapping(
-            virt_addr,
-            PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT,
-        ) {
-            Ok(_) => (),
-            Err(MappingError::OutOfPhysicalMemory) => return Err(OutOfPhysicalMemory),
-            Err(MappingError::AlreadyMapped(_)) => {
-                debug_assert!(false, "nothing should be mapped here...");
-                unsafe { core::hint::unreachable_unchecked() };
-            }
+    match process.memory_mapper.load_at_with(
+        STACK_BASE - STACK_SIZE_IN_PAGES * 0x1000,
+        STACK_SIZE_IN_PAGES,
+        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::PRESENT,
+        |_| (),
+    ) {
+        Ok(_) => (),
+        Err(MappingError::OutOfPhysicalMemory) => return Err(OutOfPhysicalMemory),
+        Err(MappingError::AlreadyMapped(_)) => {
+            debug_assert!(false, "nothing should be mapped here...");
+            unsafe { core::hint::unreachable_unchecked() };
         }
-
-        remaining -= 1;
-        virt_addr += 0x1000;
     }
 
     nd_log::info!("Passing control to the `nd_init` program...");

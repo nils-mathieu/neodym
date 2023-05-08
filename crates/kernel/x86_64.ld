@@ -16,6 +16,7 @@ SECTIONS
     __nd_image_size = __image_end - __image_start;
 
     .text : {
+        .limine_reqs
         *(.text .text.*)
     } :text
 

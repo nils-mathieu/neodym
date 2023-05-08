@@ -196,6 +196,57 @@ impl MemoryMapper {
         Ok(entry)
     }
 
+    /// Loads the requested number of pages starting at the provided virtual address. On each
+    /// page, the provided function is called with the entry for the page.
+    pub fn load_at_with<F>(
+        &mut self,
+        at: VirtAddr,
+        count: u64,
+        flags: PageTableFlags,
+        mut with: F,
+    ) -> Result<(), MappingError>
+    where
+        F: FnMut(&mut MemoryMapperEntry),
+    {
+        let mut virt_addr = at;
+
+        for _ in 0..count {
+            let page = self.allocate_mapping(virt_addr, flags)?;
+            with(page);
+            virt_addr += 0x1000;
+        }
+
+        Ok(())
+    }
+
+    /// Loads the provided data at the provided virtual address.
+    ///
+    /// This function allocates physical pages as needed. Note that those physical pages are not
+    /// guarenteed to be contiguous.
+    pub fn load_at(
+        &mut self,
+        data: &[u8],
+        at: VirtAddr,
+        flags: PageTableFlags,
+    ) -> Result<(), MappingError> {
+        let count = (data.len() + 0xfff) / 0x1000;
+        let mut remainder = data;
+
+        self.load_at_with(at, count as u64, flags, |page| unsafe {
+            let to_copy = core::cmp::min(remainder.len(), super::PAGE_SIZE);
+
+            // SAFETY:
+            //  We're copying a chunk of the input data into the page.
+            core::ptr::copy_nonoverlapping(
+                remainder.as_ptr(),
+                page.kernel_virtual_address() as usize as *mut u8,
+                to_copy,
+            );
+
+            remainder = remainder.get_unchecked(to_copy..);
+        })
+    }
+
     /// Maps the kernel into this address space.
     pub fn map_kernel(&mut self) -> Result<(), MappingError> {
         let info = self.page_allocator.kernel_info();
