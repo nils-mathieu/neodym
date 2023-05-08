@@ -29,6 +29,13 @@ impl Gdt {
         tss: SegmentDescriptor::NULL,
     };
 
+    pub const KERNEL_CODE: SegmentSelector =
+        SegmentSelector::new(1, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
+    pub const KERNEL_DATA: SegmentSelector =
+        SegmentSelector::new(2, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
+    pub const TSS: SegmentSelector =
+        SegmentSelector::new(5, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
+
     /// Returns a [`TablePtr`] referencing this *Global Descriptor Table*.
     pub fn table_ptr(&self) -> TablePtr {
         let limit = core::mem::size_of::<Gdt>() as u16 - 1;
@@ -54,15 +61,12 @@ static mut GDT: Gdt = Gdt::NULL;
 /// The *Interrupt Descriptor Table* that we're going to use.
 static mut IDT: Idt = Idt::new();
 
-/// Initializes the **GDT** and the **IDT**.
-///
-/// This function will also update model specific registers to enable the `syscall` and `sysret`
-/// instructions, as they require specific segment selectors to be set.
+/// Initializes the GDT.
 ///
 /// # Safety
 ///
 /// This function must only be called once.
-pub unsafe fn initialize_tables() {
+pub unsafe fn setup_gdt() {
     unsafe {
         // Initialize the GDT.
         nd_log::trace!("Setting up the GDT...");
@@ -87,27 +91,38 @@ pub unsafe fn initialize_tables() {
             &TSS as *const Tss as usize as u64,
         );
 
-        let cs = SegmentSelector::new(1, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
-        let ss = SegmentSelector::new(2, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
-        let tss_sel = SegmentSelector::new(5, DescriptorTable::Gdt, PrivilegeLevel::Ring0);
-
         nd_x86_64::lgdt(&GDT.table_ptr());
-        nd_x86_64::set_cs(cs);
-        nd_x86_64::set_ss(ss);
-        nd_x86_64::ltr(tss_sel);
+        nd_x86_64::set_cs(Gdt::KERNEL_CODE);
+        nd_x86_64::set_ss(Gdt::KERNEL_DATA);
+        nd_x86_64::ltr(Gdt::TSS);
+    }
+}
 
-        // Initialize the IDT.
-        nd_log::trace!("Setting up the IDT...");
+/// Sets the IDT up.
+///
+/// # Safety
+///
+/// This function should only be called once.
+pub unsafe fn setup_idt() {
+    nd_log::trace!("Setting up the IDT...");
+
+    unsafe {
         macro_rules! set_exception_handler {
             ($f:ident, $handler:expr) => {
-                IDT.$f($handler, cs, None, GateType::Trap, PrivilegeLevel::Ring0);
+                IDT.$f(
+                    $handler,
+                    Gdt::KERNEL_CODE,
+                    None,
+                    GateType::Trap,
+                    PrivilegeLevel::Ring0,
+                );
             };
         }
         macro_rules! set_interrupt_handler {
             ($index:expr, $handler:expr) => {
                 IDT[$index] = GateDescriptor::new(
                     $handler as usize as u64,
-                    cs,
+                    Gdt::KERNEL_CODE,
                     None,
                     GateType::Interrupt,
                     PrivilegeLevel::Ring0,
@@ -129,7 +144,7 @@ pub unsafe fn initialize_tables() {
         );
         IDT.set_double_fault(
             super::interrupts::double_fault,
-            cs,
+            Gdt::KERNEL_CODE,
             Some(IstIndex::One),
             GateType::Trap,
             PrivilegeLevel::Ring0,
@@ -183,10 +198,21 @@ pub unsafe fn initialize_tables() {
         set_interrupt_handler!(39, super::interrupts::apic_spurious);
 
         nd_x86_64::lidt(&IDT.table_ptr());
+    }
+}
 
-        // Initialize the system calls handler.
-        nd_log::trace!("Setting up system calls...");
+/// Initializes the necessary registers to make system calls work.
+///
+/// This includes enabling the extended feature enable register for compatibility between Intel
+/// and AMD processors, setting the STAR and LSTAR registers.
+///
+/// # Safety
+///
+/// This function should only be called once.
+pub unsafe fn setup_system_calls() {
+    nd_log::trace!("Setting up system calls...");
 
+    unsafe {
         nd_x86_64::set_efer(nd_x86_64::efer() | Efer::SYSTEM_CALL_ENABLE);
         nd_x86_64::set_star(Star::new(
             SegmentSelector::new(2, DescriptorTable::Gdt, PrivilegeLevel::Ring3),

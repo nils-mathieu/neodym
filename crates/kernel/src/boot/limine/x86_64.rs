@@ -74,7 +74,11 @@ pub extern "C" fn entry_point() -> ! {
     let page_allocator =
         unsafe { PageAllocatorTok::initialize(kernel_info, &mut available_memory) };
 
-    unsafe { crate::arch::x86_64::initialize_tables() };
+    unsafe {
+        crate::arch::x86_64::setup_gdt();
+        crate::arch::x86_64::setup_idt();
+        crate::arch::x86_64::setup_system_calls();
+    }
 
     // Load the initial program.
     let Some(nd_init) = find_init_program() else {
