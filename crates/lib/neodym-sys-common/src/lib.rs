@@ -137,10 +137,7 @@ macro_rules! define_SysError_constants {
     };
 }
 
-define_SysError_constants! {
-    /// Invalid Process Handle
-    pub const INVALID_PROCESS_HANDLE = 0;
-}
+define_SysError_constants! {}
 
 impl fmt::Debug for SysError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

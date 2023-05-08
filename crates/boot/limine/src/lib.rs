@@ -16,6 +16,7 @@
 
 mod bootloader_info;
 mod entry_point;
+mod framebuffer;
 mod hhdm;
 mod kernel_address;
 mod memory_map;
@@ -24,6 +25,7 @@ mod smp;
 
 pub use self::bootloader_info::*;
 pub use self::entry_point::*;
+pub use self::framebuffer::*;
 pub use self::hhdm::*;
 pub use self::kernel_address::*;
 pub use self::memory_map::*;

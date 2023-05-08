@@ -68,7 +68,6 @@ static mut IDT: Idt = Idt::new();
 /// This function must only be called once.
 pub unsafe fn setup_gdt() {
     unsafe {
-        // Initialize the GDT.
         nd_log::trace!("Setting up the GDT...");
         TSS.set_interrupt_stack(
             IstIndex::One,
