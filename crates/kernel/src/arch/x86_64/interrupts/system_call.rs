@@ -57,8 +57,11 @@ extern "C" fn nd_handle_syscall_inner(
     };
 
     match sysno {
-        SystemCall::TerminateSelf => {
-            todo!("implement the TerminateSelf system call");
+        SystemCall::Terminate => {
+            todo!("implement the Terminate system call");
+        }
+        SystemCall::MapMemory => {
+            todo!("implement the MapMemory system call");
         }
     }
 }

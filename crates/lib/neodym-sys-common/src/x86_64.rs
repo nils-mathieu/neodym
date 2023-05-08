@@ -1,5 +1,7 @@
 //! Structures and constants specific to x86_64.
 
+use core::fmt;
+
 /// A system call supported on the x86_64 architecture.
 ///
 /// The disciminant of this enum corresponds to the system call number.
@@ -58,35 +60,31 @@ pub enum PageSize {
 pub struct MappingEntry(pub u64);
 
 impl MappingEntry {
-    const READABLE_MASK: u64 = 1 << 0;
-    const WRITABLE_MASK: u64 = 1 << 1;
-    const EXECUTABLE_MASK: u64 = 1 << 2;
-
     /// Returns whether the pages are readable.
     #[inline(always)]
     pub const fn readable(self) -> bool {
-        self.0 & Self::READABLE_MASK != 0
+        self.0 & (1 << 0) != 0
     }
 
     /// Returns whether the pages are writable.
     #[inline(always)]
     pub const fn writable(self) -> bool {
-        self.0 & Self::WRITABLE_MASK != 0
+        self.0 & (1 << 1) != 0
     }
 
     /// Returns whether the pages are executable.
     #[inline(always)]
     pub const fn executable(self) -> bool {
-        self.0 & Self::EXECUTABLE_MASK != 0
+        self.0 & (1 << 2) != 0
     }
 
     /// Creates a new [`MappingEntry`] with the additional "readable" flag set to `yes`.
     #[inline(always)]
     pub const fn with_readable(mut self, yes: bool) -> Self {
         if yes {
-            self.0 |= Self::READABLE_MASK;
+            self.0 |= 1 << 0;
         } else {
-            self.0 &= !Self::READABLE_MASK;
+            self.0 &= !(1 << 0);
         }
 
         self
@@ -96,9 +94,9 @@ impl MappingEntry {
     #[inline(always)]
     pub const fn with_writable(mut self, yes: bool) -> Self {
         if yes {
-            self.0 |= Self::WRITABLE_MASK;
+            self.0 |= 1 << 1;
         } else {
-            self.0 &= !Self::WRITABLE_MASK;
+            self.0 &= !(1 << 1);
         }
 
         self
@@ -108,9 +106,9 @@ impl MappingEntry {
     #[inline(always)]
     pub const fn with_executable(mut self, yes: bool) -> Self {
         if yes {
-            self.0 |= Self::EXECUTABLE_MASK;
+            self.0 |= 1 << 2;
         } else {
-            self.0 &= !Self::EXECUTABLE_MASK;
+            self.0 &= !(1 << 2);
         }
 
         self
@@ -119,21 +117,21 @@ impl MappingEntry {
     /// Returns the number of pages to map with this entry.
     #[inline(always)]
     pub const fn count(self) -> u64 {
-        self.0 >> 52
+        self.0 >> 57
     }
 
     /// Creates a new [`MappingEntry`] with the additional "count" field set to `count`.
     ///
     /// # Panics
     ///
-    /// This function panics in debug builds if `count` is greater than `0xFFF`. In release builds,
+    /// This function panics in debug builds if `count` is greater than `0xFE`. In release builds,
     /// it will simply be truncated.
     #[inline(always)]
     pub const fn with_count(mut self, count: u64) -> Self {
-        debug_assert!(count <= 0xFFF);
+        debug_assert!(count <= 0xFE);
 
-        self.0 &= !(0xFFF << 52);
-        self.0 |= count << 52;
+        self.0 &= !(0xFE << 57);
+        self.0 |= count << 57;
 
         self
     }
@@ -189,5 +187,18 @@ impl MappingEntry {
     #[inline(always)]
     pub const fn address(self) -> u64 {
         self.0 & 0x000FFFFF_FFFFF000
+    }
+}
+
+impl fmt::Debug for MappingEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("MappingEntry")
+            .field("readable", &self.readable())
+            .field("writable", &self.writable())
+            .field("executable", &self.executable())
+            .field("size", &self.size())
+            .field("address", &format_args!("{:#x}", self.address()))
+            .field("count", &self.count())
+            .finish()
     }
 }

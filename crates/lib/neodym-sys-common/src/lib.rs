@@ -25,6 +25,12 @@ impl SysResult {
     /// This is the smallest allowed value of [`SysError`] without underflowing.
     pub const FIRST_ERROR: usize = (-4096isize) as usize;
 
+    /// Creates a new [`SysResult`] from a system call error.
+    #[inline(always)]
+    pub const fn from_error(err: SysError) -> Self {
+        Self(err.0)
+    }
+
     /// Returns whether the inner value of this [`SysResult`] represents an error.
     #[inline(always)]
     pub fn is_error(self) -> bool {

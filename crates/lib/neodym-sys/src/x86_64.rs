@@ -106,7 +106,7 @@ pub unsafe fn syscall3(n: SystemCall, arg0: usize, arg1: usize, arg2: usize) -> 
 #[inline(always)]
 pub fn terminate_self() -> ! {
     unsafe {
-        // This system call is infallible won't even return.
+        // This system call is infallible won't even return as we're passing a null process handle.
         let _ = syscall1(SystemCall::Terminate, 0);
         core::hint::unreachable_unchecked();
     }
