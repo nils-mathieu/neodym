@@ -27,6 +27,7 @@ Dawson R. Engler, M. Frans Kaashoek, and James O'Toole Jr.
 ## Contents
 
 1. [Booting](booting.md)
-2. [System Calls](system_calls.md)
+2. [Processes And Resources](processes_and_resources.md)
+3. [System Calls](system_calls.md)
 
 And other miscellaneous [notes](notes.md).

@@ -1,5 +1,7 @@
 use core::fmt;
 
+use crate::Feature;
+
 /// Requests the Limine bootloader to provide information about available framebuffers.
 #[derive(Debug)]
 pub struct FramebufferRequest;
@@ -281,4 +283,11 @@ impl VideoMode {
     pub fn blue_mask_shift(&self) -> u8 {
         self.blue_mask_shift
     }
+}
+
+impl Feature for FramebufferRequest {
+    const MAGIC: [u64; 2] = [0x9d5827dcd881dd75, 0xa3148604f6fab11b];
+    const EXPECTED_REVISION: u64 = 1;
+    const REVISION: u64 = 0;
+    type Response = FramebufferResponse;
 }

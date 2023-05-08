@@ -2,7 +2,9 @@
 
 use core::arch::asm;
 
-use neodym_sys_common::{SysResult, SystemCall};
+use neodym_sys_common::{MappingEntry, SysResult, SystemCall};
+
+use crate::ProcessHandle;
 
 /// Performs a system call with no arguments.
 ///
@@ -100,11 +102,38 @@ pub unsafe fn syscall3(n: SystemCall, arg0: usize, arg1: usize, arg2: usize) -> 
 
 /// Terminates the current process.
 ///
-/// This corresponds to the [`SystemCall::TerminateSelf`] system call.
+/// This corresponds to the [`SystemCall::Terminate`] system call.
+#[inline(always)]
 pub fn terminate_self() -> ! {
     unsafe {
         // This system call is infallible won't even return.
-        let _ = syscall0(SystemCall::TerminateSelf);
+        let _ = syscall1(SystemCall::Terminate, 0);
         core::hint::unreachable_unchecked();
+    }
+}
+
+/// Terminates the given process.
+///
+/// If the povided process handle is `None`, or a handle to the current process, then the current
+/// process is terminated and the function never returns.
+///
+/// This corresponds to the [`SystemCall::Terminate`] system call.
+#[inline(always)]
+pub fn terminate(process: Option<ProcessHandle>) -> SysResult {
+    unsafe { syscall1(SystemCall::Terminate, process.map_or(0, ProcessHandle::get)) }
+}
+
+/// Maps memory into the address space of the given process.
+///
+/// This corresponds to the [`SystemCall::MapMemory`] system call.
+#[inline(always)]
+pub fn map_memory(process: Option<ProcessHandle>, entries: &[MappingEntry]) -> SysResult {
+    unsafe {
+        syscall3(
+            SystemCall::MapMemory,
+            process.map_or(0, ProcessHandle::get),
+            entries.as_ptr() as usize,
+            entries.len(),
+        )
     }
 }
