@@ -33,10 +33,15 @@ The `Terminate` system call terminates the specified process.
 If the provided parameter is `0`, the current process is terminated and the system call never
 returns control to the caller.
 
+#### Permissions
+
+To terminate another process, the process must have the `Terminate` permission over the target
+process. This permission is not required when terminating the current process.
+
 #### Errors
 
-- `PermissionDenied` is returned if the caller does not have the `Terminate` permission over the
-  requested process.
+- `PermissionDenied` is returned if the caller does not have the necessary permissions to terminate
+  the specified process.
 
 ### MapMemory
 
@@ -52,8 +57,8 @@ returns control to the caller.
 SysResult map_memory(ProcessHandle proces, uint64_t const *entries, size_t count);
 ```
 
-The `MapMemory` system call maps or unmaps a physical page of memory and maps it to the virtual
-address space of the current process at the given address.
+The `MapMemory` system call maps or unmaps a physical page of memory to the virtual address space
+of the target process.
 
 `process` is the handle of the process to map the memory to. When `process` is `0`, the current
 process is used.
@@ -63,13 +68,18 @@ process is used.
 Each entry is separated into two parts:
 
 ```
-                 52                                  12                0
-+------------------+-----------------------------------+----------------+
-| 12 bits count    | 40 bits address                   | 12 bits flags  |
-+------------------+-----------------------------------+----------------+
+             57                                  12                0
++--------------+-----------------------------------+----------------+
+| 7 bits count | 45 bits address                   | 12 bits flags  |
++--------------+-----------------------------------+----------------+
 ```
 
 The flag bits are used to describe the requested mapping.
+
+#### Permissions
+
+Attempting to map the memory of another process requires the `MapMemoryOf` permission over the
+target process. This permission is not required when mapping the memory of the current process.
 
 #### Mapping Size
 
@@ -118,11 +128,6 @@ This function always returns `0` on success.
   - Providing two incompatible entries.
 
 - `PermissionDenied` if the current process does not have the required permissions.
-
-  - Specifically, attempting to map a page within another process's memory space will result in an
-    error if the current process does not have the `MapMemoryOf` permission for that specific
-    process, or the `MapMemoryOfEveryone` permission.
-  - A process is always allowed to allocate memory for itself.
 
 - `OutOfMemory` if there is no more physical memory available.
 
