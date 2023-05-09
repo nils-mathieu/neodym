@@ -20,5 +20,9 @@ This project could not have been possible without the help of the following reso
   Mazières, Thomas Pinckney, Robert Grimm, John Jannotti, and Kenneth Mackenzie
 - [The UNIX-HATERS Handbook](https://web.mit.edu/~simsong/www/ugh.pdf) by Simson Garfinkel,
   Daniel Weise and Steven Strassmann.
-- [MIT 6.828](https://pdos.csail.mit.edu/6.828/2014/overview.html).
-- [C2 Wiki Entry on Exokernels](https://wiki.c2.com/?ExoKernel)
+- [MIT 6.828](https://pdos.csail.mit.edu/6.828/2014/overview.html). (props to MIT for making this
+  available online)
+- [C2 Wiki Entry on Exokernels](https://wiki.c2.com/?ExoKernel). (how did have I not heard of this
+  website before?)
+- The system that keeps track of free pages is heavily inspired by
+  [Linux's Physical Page Allocator](https://www.kernel.org/doc/gorman/html/understand/understand009.html).
