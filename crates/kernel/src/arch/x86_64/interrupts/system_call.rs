@@ -57,6 +57,9 @@ extern "C" fn nd_handle_syscall_inner(
     };
 
     match sysno {
+        SystemCall::Ring0 => {
+            todo!("Implement the Ring0 system call");
+        }
         SystemCall::Terminate => {
             todo!("implement the Terminate system call");
         }

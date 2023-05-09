@@ -6,6 +6,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(usize)]
 pub enum SystemCall {
+    Ring0,
     Terminate,
     GetMemory,
     MapMemory,

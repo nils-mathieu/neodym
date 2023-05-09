@@ -1,7 +1,7 @@
 //! Raw system calls on the x86_64 architecture.
 
 use core::arch::asm;
-use core::mem::MaybeUninit;
+use core::mem::{ManuallyDrop, MaybeUninit};
 
 use neodym_sys_common::{MemorySegment, PageTableEntry, SysResult, SystemCall};
 
@@ -99,6 +99,67 @@ pub unsafe fn syscall3(n: SystemCall, arg0: usize, arg1: usize, arg2: usize) -> 
     }
 
     SysResult(ret)
+}
+
+/// Calls the given function with supervisor privileges.
+///
+/// The function is guarenteed to be called at most once.
+///
+/// This corresponds to the [`SystemCall::Ring0`] system call.
+///
+/// # Safety
+///
+/// Executing code in ring 0 is fundamentally unsafe as it can break the entire system.
+///
+/// The function must not unwind.
+#[inline(always)]
+pub unsafe fn ring0_raw(data: *mut (), f: extern "C" fn(*mut ())) -> SysResult {
+    unsafe { syscall2(SystemCall::Ring0, data as usize, f as usize) }
+}
+
+/// Calls the given function with supervisor privileges.
+///
+/// This corresponds to the [`SystemCall::Ring0`] system call.
+///
+/// # Safety
+///
+/// Executing code in ring 0 is fundamentally unsafe as it can break the entire system.
+///
+/// The function must not unwind.
+#[inline(always)]
+pub unsafe fn ring0<F>(f: F) -> SysResult
+where
+    F: FnOnce(),
+{
+    #[inline(always)] // no idea if this will do anything
+    extern "C" fn adaptor<F>(data: *mut ())
+    where
+        F: FnOnce(),
+    {
+        // SAFETY:
+        //  This function is called at most once by the kernel. We can safely take the value out of
+        //  the `ManuallyDrop` and call it.
+        unsafe { ManuallyDrop::take(&mut *(data as *mut ManuallyDrop<F>))() };
+    }
+
+    // We don't want the function do be dropped twice if the kernel calls it.
+    // For this reason, we wrap it in a `ManuallyDrop` and drop it manually if the kernel doesn't
+    // call it.
+    let mut f = ManuallyDrop::new(f);
+
+    // SAFETY:
+    //  The caller must uphold the safety requirements of `ring0_raw`.
+    let ret = unsafe { ring0_raw(&mut f as *mut ManuallyDrop<F> as *mut (), adaptor::<F>) };
+
+    if ret.is_error() {
+        // The function was not executed.
+
+        // SAFETY:
+        //  The function was not executed so it's safe to drop it.
+        unsafe { ManuallyDrop::drop(&mut f) };
+    }
+
+    ret
 }
 
 /// Terminates the current process.
