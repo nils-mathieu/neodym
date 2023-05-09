@@ -12,12 +12,8 @@ a system call is issued, the kernel checks whether the process has the necessary
 perform the requested operation. If it does, the system call completes. Otherwise, an error is
 returned to the process indicating that it does not have the necessary permissions.
 
-## Permissions
-
-- `Terminate(ProcessHandle)` allows a process to terminate another (specific) process.
-
 ## Resources
 
 Resources are literal and concrete things available on the system. Physical RAM, CPU time, disk
 space, etc. However, files, sockets, and other abstractions are _not_ resources. They are simply
-abstractions over resources which processes can use.
+abstractions over resources which processes can use if they wish to.
