@@ -16,7 +16,7 @@ use neodym_sys_common::{SysResult, SystemCall};
 ///
 /// # Return Value
 ///
-/// The return value of the system call is stored in `rax`.
+/// The return value of the system call is stored in `rax` and is of type [`SysResult`].
 ///
 /// # Safety
 ///

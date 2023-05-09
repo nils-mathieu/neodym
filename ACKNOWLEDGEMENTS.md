@@ -20,3 +20,5 @@ This project could not have been possible without the help of the following reso
   Mazières, Thomas Pinckney, Robert Grimm, John Jannotti, and Kenneth Mackenzie
 - [The UNIX-HATERS Handbook](https://web.mit.edu/~simsong/www/ugh.pdf) by Simson Garfinkel,
   Daniel Weise and Steven Strassmann.
+- [MIT 6.828](https://pdos.csail.mit.edu/6.828/2014/overview.html).
+- [C2 Wiki Entry on Exokernels](https://wiki.c2.com/?ExoKernel)

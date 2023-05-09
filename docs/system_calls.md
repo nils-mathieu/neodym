@@ -17,10 +17,10 @@ passed in the `rax` register, and the arguments are passed to `rdi`, `rsi` and `
 
 The return value is stored in `rax`.
 
-| Mnemonic                | `rax` | `rdi`   | `rsi`   | `rdx` |
-| ----------------------- | ----- | ------- | ------- | ----- |
-| [Terminate](#Terminate) | 0     | process |         |       |
-| [MapMemory](#MapMemory) | 1     | process | entries | count |
+| Mnemonic                | `rax` | `rdi`    | `rsi` | `rdx` |
+| ----------------------- | ----- | -------- | ----- | ----- |
+| [Terminate](#Terminate) | 0     | process  |       |       |
+| [GetMemory](#GetMemory) | 1     | segments | count |       |
 
 ### Terminate
 
@@ -33,6 +33,11 @@ The `Terminate` system call terminates the specified process.
 If the provided parameter is `0`, the current process is terminated and the system call never
 returns control to the caller.
 
+#### Returns
+
+This system call always returns `0` on success, or never if the specified process is the current
+one.
+
 #### Permissions
 
 To terminate another process, the process must have the `Terminate` permission over the target
@@ -43,93 +48,35 @@ process. This permission is not required when terminating the current process.
 - `PermissionDenied` is returned if the caller does not have the necessary permissions to terminate
   the specified process.
 
-### MapMemory
+### GetMemory
 
 ```c
-#define MAP_MEMORY_READABLE   (1 << 0)
-#define MAP_MEMORY_WRITABLE   (1 << 1)
-#define MAP_MEMORY_EXECUTABLE (1 << 2)
-#define MAP_MEMORY_UNMAP      (0 << 3)
-#define MAP_MEMORY_SIZE_4K    (1 << 3)
-#define MAP_MEMORY_SIZE_2M    (2 << 3)
-#define MAP_MEMORY_SIZE_2G    (3 << 3)
+typedef struct {
+    start: uint64_t;
+    size: uint64_t;
+} Segment;
 
-SysResult map_memory(ProcessHandle proces, uint64_t const *entries, size_t count);
+SysResult get_memory(Segment *segments, size_t count);
 ```
 
-The `MapMemory` system call maps or unmaps a physical page of memory to the virtual address space
-of the target process.
+The `GetMemory` system call is used to retrieve the memory segments currently available on the
+system.
 
-`process` is the handle of the process to map the memory to. When `process` is `0`, the current
-process is used.
+`count` is the number of `Segment` structures that can be stored in the buffer referenced by
+`segments`.
 
-`entries` is a pointer to an array of `count` mapping entries.
+The kernel will write at most `count` instances of `Segment` to the buffer referenced by `segments`.
 
-Each entry is separated into two parts:
-
-```
-             57                                  12                0
-+--------------+-----------------------------------+----------------+
-| 7 bits count | 45 bits address                   | 12 bits flags  |
-+--------------+-----------------------------------+----------------+
-```
-
-The flag bits are used to describe the requested mapping.
-
-#### Permissions
-
-Attempting to map the memory of another process requires the `MapMemoryOf` permission over the
-target process. This permission is not required when mapping the memory of the current process.
-
-#### Mapping Size
-
-Pages can be mapped in three different sizes:
-
-- `MAP_MEMORY_SIZE_4K` indicates that the page is four KiB in size.
-- `MAP_MEMORY_SIZE_2M` indicates that the page is two MiB in size.
-- `MAP_MEMORY_SIZE_2G` indicates that the page is two GiB in size.
-
-When none of those flags are set (`MAP_MEMORY_UNMAP`), the page is unmapped instead.
-
-When the mapping is already present, attempting to change its size will result in an error.
-
-#### Protection Flags
-
-Pages can have specific protections applied to them.
-
-- `MAP_MEMORY_READABLE` indicates that the page can be read from.
-- `MAP_MEMORY_WRITABLE` indicates that the page can be written to.
-- `MAP_MEMORY_EXECUTABLE` indicates that the page can be executed.
-
-Note that those protection are only applied to the target process.
-
-If the mapping is already present, the protection flags are simply updated to the requested values.
-
-#### Page Count
-
-The `count` field in each entry indicates the number of adjacent pages to map. When multiple pages
-are mapped to the same virtual address, the last page is the one that's actually mapped when they
-are compatible.
-
-If two entries are not compatible (i.e. they have different size for the same address), the system
-call will return `InvalidParameter` and no mapping will be performed.
+Those segments are guarenteed to be non-overlapping, and sorted by ascending order of their
+addresses.
 
 #### Returns
 
-This function always returns `0` on success.
+This system call always succeeds and returns the number of segments available on the system.
+
+Note that this _does not_ depend on the provided `count` value. This system call will always write
+at most `count` elements to the `segments` buffer.
 
 #### Errors
 
-- `InvalidParameter` if one of the provided input parameters is invalid.
-
-  - Attempting to pass an invalid pointer as the `pages` parameter.
-  - Attempting to map a misaligned address.
-  - Attempting to unmap a misaligned address, or absent mapping.
-  - Providing two incompatible entries.
-
-- `PermissionDenied` if the current process does not have the required permissions.
-
-- `OutOfMemory` if there is no more physical memory available.
-
-  - It is also possible for this error to be returned if the process allocated to much memory and
-    the kernel prevents it from allocating more.
+This system call never fails.

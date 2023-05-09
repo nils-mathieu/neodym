@@ -12,7 +12,7 @@ a system call is issued, the kernel checks whether the process has the necessary
 perform the requested operation. If it does, the system call completes. Otherwise, an error is
 returned to the process indicating that it does not have the necessary permissions.
 
-### Permissions
+## Permissions
 
 - `Terminate(ProcessHandle)` allows a process to terminate another (specific) process.
 - `MapMemoryOf(ProcessHandle)` allows a process to map physical memory to another (specific)
@@ -27,5 +27,7 @@ abstractions over resources which processes can use.
 ### Physical Memory
 
 Physical memory is allocated and deallocate with the [`MapMemory`](system_calls.md#mapmemory)
-system call. This system call allows a process to insert a page table entry, and thus allocate a
-page of physical memory.
+system call.
+
+The kernel ensures that no two processes map the same physical page of memory at the same time,
+unless the requesting process has the `MapMemoryOf` permission over the target process.
