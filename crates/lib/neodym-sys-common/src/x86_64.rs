@@ -44,8 +44,10 @@ impl SystemCall {
 
 /// A segment of physical memory.
 #[repr(C)]
-pub struct Segment {
-    pub start_address: u64,
+pub struct MemorySegment {
+    /// The physical base address of the memory segment.
+    pub address: u64,
+    /// The length of the memory segment, in bytes.
     pub length: u64,
 }
 

@@ -3,7 +3,7 @@
 use core::arch::asm;
 use core::mem::MaybeUninit;
 
-use neodym_sys_common::{PageTableEntry, Segment, SysResult, SystemCall};
+use neodym_sys_common::{MemorySegment, PageTableEntry, SysResult, SystemCall};
 
 use crate::ProcessHandle;
 
@@ -129,7 +129,7 @@ pub fn terminate(process: Option<ProcessHandle>) -> SysResult {
 /// The total number of segments available on the system is returned, regardless of the length of
 /// `buf`.
 #[inline(always)]
-pub fn get_memory(buf: &mut [MaybeUninit<Segment>]) -> SysResult {
+pub fn get_memory(buf: &mut [MaybeUninit<MemorySegment>]) -> SysResult {
     unsafe { syscall2(SystemCall::GetMemory, buf.as_mut_ptr() as usize, buf.len()) }
 }
 
