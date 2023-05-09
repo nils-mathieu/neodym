@@ -144,12 +144,10 @@ macro_rules! define_SysError_constants {
 }
 
 define_SysError_constants! {
-    /// The process does not have the necessary permissions to perform the requested operation.
-    pub const PERMISSION_DENIED = 0;
-    /// The system call was given an invalid parameter.
-    pub const INVALID_PARAMETER = 1;
-    /// The system is out of physical memory.
-    pub const OUT_OF_MEMORY = 2;
+    /// An invalid argument was passed to a system call.
+    pub const INVALID_ARGUMENT = 0;
+    /// Resource acquisition would conflict with another process.
+    pub const CONFLICT = 1;
 }
 
 impl fmt::Debug for SysError {
