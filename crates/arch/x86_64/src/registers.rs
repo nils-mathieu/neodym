@@ -7,42 +7,6 @@ use crate::{PhysAddr, PrivilegeLevel, SegmentSelector, VirtAddr};
 use core::arch::asm;
 use core::fmt;
 
-/// Returns the current value of the stack pointer.
-#[inline(always)]
-pub fn rsp() -> VirtAddr {
-    let rsp: u64;
-    unsafe {
-        asm!("mov {}, rsp", out(reg) rsp, options(nostack, nomem, preserves_flags));
-    }
-    rsp
-}
-
-/// Sets the value of the **RSP** register.
-#[inline(always)]
-pub unsafe fn set_rsp(rsp: VirtAddr) {
-    unsafe {
-        asm!("mov rsp, {}", in(reg) rsp, options(nomem, preserves_flags));
-    }
-}
-
-/// Returns the value of the stack base pointer.
-#[inline(always)]
-pub fn rbp() -> VirtAddr {
-    let rbp: u64;
-    unsafe {
-        asm!("mov {}, rbp", out(reg) rbp, options(nostack, nomem, preserves_flags));
-    }
-    rbp
-}
-
-/// Sets the value of the **RBP** register.
-#[inline(always)]
-pub unsafe fn set_rbp(rbp: VirtAddr) {
-    unsafe {
-        asm!("mov rbp, {}", in(reg) rbp, options(nomem, preserves_flags));
-    }
-}
-
 /// Returns the current value of the instruction pointer.
 #[inline(always)]
 pub fn rip() -> u64 {
@@ -259,6 +223,7 @@ impl Cr3 {
     /// Creates a new instance of the structure.
     #[inline(always)]
     pub fn new(addr: VirtAddr, flags: Cr3Flags) -> Self {
+        debug_assert!(addr & 0xFFF == 0, "CR3 address must be page aligned");
         Self(addr | flags.bits())
     }
 

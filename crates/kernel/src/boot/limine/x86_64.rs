@@ -13,16 +13,30 @@ use crate::arch::x86_64::{
 use super::find_init_program;
 use super::{BOOTLOADER_INFO, HHDM, KERNEL_ADDR, MEMORY_MAP};
 
-static mut KERNEL_STACK: [u8; 4096 * 16] = [0; 4096 * 16];
+const KERNEL_STACK_SIZE: usize = 4096 * 16;
+static mut KERNEL_STACK: [u8; KERNEL_STACK_SIZE] = [0; KERNEL_STACK_SIZE];
 
 /// The entry point of the kernel when booted by the Limine bootloader on **x86_64**.
+#[naked]
 pub extern "C" fn entry_point() -> ! {
-    // Setup the stack used by the kernel.
     unsafe {
-        let stack = KERNEL_STACK.as_mut_ptr().add(4096 * 16) as usize as VirtAddr;
-        nd_x86_64::set_rsp(stack);
+        // We need to setup a stack within the kernel's address space, as the bootloader's memory
+        // eventually gets reclaimed as usable memory.
+        core::arch::asm!(
+            r#"
+            lea rsp, [{} + {}]
+            mov rbp, rsp
+            jmp {}
+            "#,
+            sym KERNEL_STACK,
+            const KERNEL_STACK_SIZE,
+            sym entry_point_inner,
+            options(noreturn),
+        );
     }
+}
 
+pub extern "C" fn entry_point_inner() -> ! {
     // SAFETY:
     //  We're in the entry point, this function won't be called ever again.
     unsafe { crate::arch::x86_64::initialize_logger() };

@@ -26,6 +26,7 @@
 #![feature(panic_info_message)]
 #![feature(allocator_api)]
 #![feature(naked_functions)]
+#![feature(asm_const)]
 
 /// Returns the size of the kernel image, in bytes.
 fn image_size() -> usize {

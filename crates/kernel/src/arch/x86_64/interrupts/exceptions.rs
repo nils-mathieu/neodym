@@ -29,13 +29,19 @@ pub extern "x86-interrupt" fn stack_segment_fault(_: InterruptStackFrame, err: T
 }
 
 pub extern "x86-interrupt" fn general_protection_fault(
-    _: InterruptStackFrame,
+    frame: InterruptStackFrame,
     err: TableEntryError,
 ) {
     if err.to_raw() == 0 {
-        panic!("General Protection Fault (err = None)");
+        panic!(
+            "General Protection Fault (err = None, RIP = {:#x})",
+            frame.instruction_pointer()
+        );
     } else {
-        panic!("General Protection Fault (err = {err:?})");
+        panic!(
+            "General Protection Fault (err = {err:?}, RIP = {:#x})",
+            frame.instruction_pointer()
+        );
     }
 }
 

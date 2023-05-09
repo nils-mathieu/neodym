@@ -43,6 +43,7 @@ pub fn spawn(mut state: ProcessInfo) -> Result<(), OutOfPhysicalMemory> {
         asm!(
             r#"
             mov rsp, {}
+            mov rbp, rsp
             sysretq
             "#,
             in(reg) state.stack_pointer,

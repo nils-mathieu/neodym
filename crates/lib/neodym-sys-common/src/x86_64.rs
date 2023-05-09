@@ -14,7 +14,7 @@ pub enum SystemCall {
 
 impl SystemCall {
     /// The number of defined system calls.
-    pub const COUNT: usize = 1;
+    pub const COUNT: usize = 4;
 
     /// Creates a new [`SystemCall`] from a system call number.
     ///

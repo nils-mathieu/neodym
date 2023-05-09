@@ -19,3 +19,7 @@ authors = ["Nils Mathieu <nils.mathieu.contact@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/nils-mathieu/neodym"
+
+[profile.release]
+lto = true
+strip = true
