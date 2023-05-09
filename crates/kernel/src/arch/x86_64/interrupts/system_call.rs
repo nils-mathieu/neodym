@@ -60,6 +60,9 @@ extern "C" fn nd_handle_syscall_inner(
         SystemCall::Terminate => {
             todo!("implement the Terminate system call");
         }
+        SystemCall::GetMemory => {
+            todo!("implement the MapMemory system call");
+        }
         SystemCall::MapMemory => {
             todo!("implement the MapMemory system call");
         }

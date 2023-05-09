@@ -1,8 +1,9 @@
 //! Raw system calls on the x86_64 architecture.
 
 use core::arch::asm;
+use core::mem::MaybeUninit;
 
-use neodym_sys_common::{MappingEntry, SysResult, SystemCall};
+use neodym_sys_common::{PageTableEntry, Segment, SysResult, SystemCall};
 
 use crate::ProcessHandle;
 
@@ -123,15 +124,23 @@ pub fn terminate(process: Option<ProcessHandle>) -> SysResult {
     unsafe { syscall1(SystemCall::Terminate, process.map_or(0, ProcessHandle::get)) }
 }
 
+/// Initializes `buf` with a list of physical memory segments available.
+///
+/// The total number of segments available on the system is returned, regardless of the length of
+/// `buf`.
+#[inline(always)]
+pub fn get_memory(buf: &mut [MaybeUninit<Segment>]) -> SysResult {
+    unsafe { syscall2(SystemCall::GetMemory, buf.as_mut_ptr() as usize, buf.len()) }
+}
+
 /// Maps memory into the address space of the given process.
 ///
 /// This corresponds to the [`SystemCall::MapMemory`] system call.
 #[inline(always)]
-pub fn map_memory(process: Option<ProcessHandle>, entries: &[MappingEntry]) -> SysResult {
+pub fn map_memory(entries: &[PageTableEntry]) -> SysResult {
     unsafe {
-        syscall3(
+        syscall2(
             SystemCall::MapMemory,
-            process.map_or(0, ProcessHandle::get),
             entries.as_ptr() as usize,
             entries.len(),
         )
