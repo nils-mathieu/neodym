@@ -8,13 +8,11 @@
 pub enum SystemCall {
     Ring0,
     Terminate,
-    GetMemory,
-    MapMemory,
 }
 
 impl SystemCall {
     /// The number of defined system calls.
-    pub const COUNT: usize = 4;
+    pub const COUNT: usize = 2;
 
     /// Creates a new [`SystemCall`] from a system call number.
     ///
@@ -41,24 +39,4 @@ impl SystemCall {
     pub const fn to_usize(self) -> usize {
         self as usize
     }
-}
-
-/// A segment of physical memory.
-#[repr(C)]
-pub struct MemorySegment {
-    /// The physical base address of the memory segment.
-    pub address: u64,
-    /// The length of the memory segment, in bytes.
-    pub length: u64,
-}
-
-/// A page table entry passed to the kernel when mapping memory.
-#[repr(C)]
-pub struct PageTableEntry {
-    /// The physical address of the page to be inserted into the page table.
-    pub physical_address: u64,
-    /// The position of the page in the page table.
-    ///
-    /// This position follows the same scheme as virtual addresses.
-    pub position: u64,
 }

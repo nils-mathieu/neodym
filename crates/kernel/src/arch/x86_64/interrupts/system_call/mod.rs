@@ -5,7 +5,6 @@ use core::mem::size_of;
 
 use neodym_sys_common::{SysError, SysResult, SystemCall};
 
-mod memory;
 mod ring0;
 mod terminate;
 
@@ -13,12 +12,7 @@ type SyscallFn = extern "C" fn(usize, usize, usize) -> SysResult;
 
 /// This table is used by the `handle_syscall` function to dispatch the system call to the correct
 /// function.
-static ND_SYSTEM_CALL_TABLE: [SyscallFn; SystemCall::COUNT] = [
-    ring0::ring0,
-    terminate::terminate,
-    memory::get_memory,
-    memory::map_memory,
-];
+static ND_SYSTEM_CALL_TABLE: [SyscallFn; SystemCall::COUNT] = [ring0::ring0, terminate::terminate];
 
 /// This function is called when the `syscall` instruction is executed in userland.
 ///
