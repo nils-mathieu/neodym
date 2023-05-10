@@ -4,7 +4,7 @@
 
 use nd_limine::File;
 
-use crate::sys_info::{SysInfo, SysInfoTok};
+use crate::x86_64::{SysInfo, SysInfoTok};
 
 mod req;
 
@@ -18,7 +18,7 @@ fn get_filename(bytes: &[u8]) -> &[u8] {
     unsafe { bytes.get_unchecked(start_idx..) }
 }
 
-/// Reads The content of the [`MODULE`] request and returns the file that has been loaded.
+/// Reads The content of the "MODULE" request and returns the file that has been loaded.
 ///
 /// # Panics
 ///
@@ -71,7 +71,7 @@ extern "C" fn entry_point() -> ! {
 extern "C" fn entry_point_inner() -> ! {
     // SAFETY:
     //  We're in the entry point, this function won't be called ever again.
-    unsafe { crate::logger::initialize() };
+    unsafe { crate::x86_64::initialize_logger() };
 
     //
     // Gather the responses from the Limine bootloader.
@@ -126,7 +126,7 @@ extern "C" fn entry_point_inner() -> ! {
         SysInfoTok::initialize(SysInfo {
             kernel_phys_addr: kernel_addr.physical_base(),
             kernel_virt_addr: kernel_addr.virtual_base(),
-            kernel_size: crate::image_size(),
+            kernel_size: crate::x86_64::image_size(),
             hhdm_offset: hhdm.offset(),
         })
     };
@@ -137,10 +137,10 @@ extern "C" fn entry_point_inner() -> ! {
     //  Thos function must only be called once. We're still in the entry point, which is only
     //  called once by the bootloader.
     unsafe {
-        crate::tables::setup_gdt();
-        crate::tables::setup_idt();
-        crate::tables::setup_system_calls();
-        crate::apic::initialize_lapic();
+        crate::x86_64::setup_gdt();
+        crate::x86_64::setup_idt();
+        crate::x86_64::setup_system_calls();
+        crate::x86_64::initialize_lapic();
 
         // Enable interrupts. We're ready to be interrupted x).
         nd_x86_64::sti();

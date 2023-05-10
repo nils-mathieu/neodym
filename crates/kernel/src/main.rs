@@ -16,27 +16,8 @@
 #![feature(naked_functions)]
 #![feature(asm_const)]
 
-/// Returns the size of the kernel image, in bytes.
-fn image_size() -> usize {
-    // This is a symbol defined in the linker script. Its *address* will be defined to the size of
-    // unpacked kernel image.
-    extern "C" {
-        #[link_name = "__nd_image_size"]
-        static IMAGE_SIZE: u8;
-    }
-
-    // SAFETY:
-    //  This static external variable is set by the linker script, and won't change afterwards.
-    unsafe { &IMAGE_SIZE as *const u8 as usize }
-}
-
-mod boot;
-
-mod apic;
-mod interrupts;
-mod logger;
-mod sys_info;
-mod tables;
+#[cfg(target_arch = "x86_64")]
+mod x86_64;
 
 /// Disables interrupts and halts the CPU.
 ///

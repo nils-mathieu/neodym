@@ -14,7 +14,7 @@ use core::fmt::Write as _;
 /// This function must not be called more than once.
 ///
 /// The serial I/O ports must not be used anywere else in the program (and must never be).
-pub unsafe fn initialize() {
+pub unsafe fn initialize_logger() {
     // SAFETY:
     //  The `initialize` function must only be called once, ensuring that the serial port has not
     //  been initialized yet.
