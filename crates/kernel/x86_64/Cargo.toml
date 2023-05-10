@@ -1,0 +1,21 @@
+[package]
+name = "neodym"
+version = "0.0.1"
+description = "The Neodym Operating System"
+
+authors.workspace = true
+edition.workspace = true
+readme.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+nd_log = { path = "../../utility/log" }
+nd_array = { path = "../../utility/array" }
+nd_spin = { path = "../../utility/spin" }
+nd_limine = { path = "../../boot/limine" }
+nd_x86_64 = { path = "../../arch/x86_64" }
+nd_apic = { path = "../../arch/apic" }
+neodym-sys-common = { path = "../../lib/neodym-sys-common" }
+
+bitflags = "2"

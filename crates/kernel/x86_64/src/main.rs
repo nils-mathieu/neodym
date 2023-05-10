@@ -42,8 +42,26 @@ fn image_size() -> usize {
     unsafe { &IMAGE_SIZE as *const u8 as usize }
 }
 
-mod arch;
 mod boot;
+
+mod apic;
+mod interrupts;
+mod logger;
+mod sys_info;
+mod tables;
+
+/// Disables interrupts and halts the CPU.
+///
+/// This function can be called when an unrecoverable error occurs.
+fn die() -> ! {
+    unsafe {
+        nd_x86_64::cli();
+
+        loop {
+            nd_x86_64::hlt();
+        }
+    }
+}
 
 /// This function is called when something in our code panics. This should be considered a serious
 /// bug in the kernel.
@@ -65,5 +83,5 @@ fn handle_panic(info: &core::panic::PanicInfo) -> ! {
         nd_log::error!(">      At: {}:{}", location.file(), location.line());
     }
 
-    self::arch::die();
+    die();
 }
