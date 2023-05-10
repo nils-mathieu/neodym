@@ -1,49 +1,12 @@
 //! The entry point of the kernel, when booted by the
 //! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md) bootloader.
 //!
-//! Because the Limine bootloader supports two different architectures, their respective entry
-//! points are defined in the [`x86_64`] and `aarch64` (not yet implemented) modules.
 
-use nd_limine::limine_reqs;
-use nd_limine::{
-    BootloaderInfo, EntryPoint, File, Hhdm, KernelAddress, MemoryMap, Module, Request,
-};
+use nd_limine::File;
 
 use crate::sys_info::{SysInfo, SysInfoTok};
 
-/// Requests the bootloader to provide information about itself, such as its name and version.
-/// Those information will be logged at startup.
-static BOOTLOADER_INFO: Request<BootloaderInfo> = Request::new(BootloaderInfo);
-
-/// Requests the Limine bootloader to call a specific function rather than the entry point specified
-/// in the ELF header.
-static ENTRY_POINT: Request<EntryPoint> = Request::new(EntryPoint(entry_point));
-
-/// Requests Limine to load an additional module along with the kernel itself.
-///
-/// This module will contain the initial program to start after the kernel has initialize itself.
-static MODULE: Request<Module> = Request::new(Module::new(&[]));
-
-/// Requests the Limine bootloader to provide a map of the available physical memory.
-static MEMORY_MAP: Request<MemoryMap> = Request::new(MemoryMap);
-
-/// Requests the Limine bootloader to provide the address of the kernel in physical memory.
-static KERNEL_ADDR: Request<KernelAddress> = Request::new(KernelAddress);
-
-/// The Limine bootloader maps the entierty of the physical memory to the higher half of the
-/// virtual address space.
-///
-/// This request provides the address of th *Higher Half Direct Map* offset.
-static HHDM: Request<Hhdm> = Request::new(Hhdm);
-
-limine_reqs!(
-    MEMORY_MAP,
-    BOOTLOADER_INFO,
-    MODULE,
-    ENTRY_POINT,
-    HHDM,
-    KERNEL_ADDR
-);
+mod req;
 
 /// Removes the begining of a path, only keeping the what's after the last `/` character.
 fn get_filename(bytes: &[u8]) -> &[u8] {
@@ -63,7 +26,7 @@ fn get_filename(bytes: &[u8]) -> &[u8] {
 fn find_init_program() -> Option<&'static File> {
     nd_log::trace!("Enumerating kernel modules...");
 
-    let response = MODULE.response()?;
+    let response = req::MODULE.response()?;
 
     let mut found = None;
 
@@ -84,10 +47,13 @@ static mut KERNEL_STACK: [u8; KERNEL_STACK_SIZE] = [0; KERNEL_STACK_SIZE];
 
 /// The entry point of the kernel when booted by the Limine bootloader on **x86_64**.
 #[naked]
-pub extern "C" fn entry_point() -> ! {
+extern "C" fn entry_point() -> ! {
     unsafe {
         // We need to setup a stack within the kernel's address space, as the bootloader's memory
         // eventually gets reclaimed as usable memory.
+        //
+        // NOTE:
+        //  We can use JMP instead of a regular CALL as the function won't return anyway.
         core::arch::asm!(
             r#"
             lea rsp, [{} + {}]
@@ -102,7 +68,7 @@ pub extern "C" fn entry_point() -> ! {
     }
 }
 
-pub extern "C" fn entry_point_inner() -> ! {
+extern "C" fn entry_point_inner() -> ! {
     // SAFETY:
     //  We're in the entry point, this function won't be called ever again.
     unsafe { crate::logger::initialize() };
@@ -112,23 +78,29 @@ pub extern "C" fn entry_point_inner() -> ! {
     // Some are necessary, others are just nice information to have.
     //
 
-    if let Some(info) = BOOTLOADER_INFO.response() {
+    if let Some(info) = req::BOOTLOADER_INFO.response() {
         nd_log::info!("Loaded by '{}' (v{})!", info.name(), info.version());
     } else {
         nd_log::info!("Loaded by a Limine-compliant bootloader.");
     }
 
-    let Some(kernel_addr) = KERNEL_ADDR.response() else {
+    if req::ENTRY_POINT.response().is_none() {
+        nd_log::warn!("The Limine bootloader did not respond to the entry point request.");
+        nd_log::warn!("  > This is just a sanity check.");
+        nd_log::warn!("  > The bootloader might be corrupted.");
+    }
+
+    let Some(kernel_addr) = req::KERNEL_ADDR.response() else {
         nd_log::error!("The Limine bootloader did not provide the address of the kernel.");
         crate::die();
     };
 
-    let Some(hhdm) = HHDM.response() else {
+    let Some(hhdm) = req::HHDM.response() else {
         nd_log::error!("The Limine bootloader did not provide the HHDM offset.");
         crate::die();
     };
 
-    let Some(_memmap) = MEMORY_MAP.response() else {
+    let Some(_memmap) = req::MEMORY_MAP.response() else {
         nd_log::error!("The Limine bootloader did not provide a map of the usable memory.");
         crate::die();
     };

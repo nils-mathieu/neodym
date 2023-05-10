@@ -22,4 +22,4 @@ repository = "https://github.com/nils-mathieu/neodym"
 
 [profile.release]
 lto = true
-strip = true
+# strip = true

@@ -19,6 +19,7 @@ pub struct SysInfo {
     pub kernel_virt_addr: VirtAddr,
 }
 
+/// The global system info object, protected by [`SysInfoTok`].
 static mut SYS_INFO: MaybeUninit<SysInfo> = MaybeUninit::uninit();
 
 /// A "token type" proving that the global [`SysInfoTok`] structure has been initialized.

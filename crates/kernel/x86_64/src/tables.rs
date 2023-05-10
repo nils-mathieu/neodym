@@ -1,3 +1,6 @@
+//! This module defines the initialization logic of the **GDT** and **IDT**. System calls are
+//! initialized here as well.
+
 use core::mem::size_of_val;
 
 use nd_x86_64::{

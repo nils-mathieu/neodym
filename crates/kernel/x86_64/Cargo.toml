@@ -1,5 +1,5 @@
 [package]
-name = "neodym"
+name = "neodym-x86_64"
 version = "0.0.1"
 description = "The Neodym Operating System"
 

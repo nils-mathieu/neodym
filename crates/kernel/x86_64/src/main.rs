@@ -3,20 +3,8 @@
 //! The present documentation describes the internal architecture of Neodym, including some
 //! implementation details.
 //!
-//! ## Boot Sequence
-//!
-//! This part of the kernel expects the machine to be loaded in a specific machine state detailed
-//! in the different sub-modules of the [`arch`] module. However, the literal entry points of the
-//! kernel are defined under the [`boot`] module.
-//!
-//! Those two modules are different because some bootloaders (such as
-//! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md)) may support
-//! multiple CPU architectures.
-//!
-//! After we've finished initializing the CPU in a well-known state, we can start the first program
-//! of the kernel. This program must be loaded as a kernel module (as we don't know what a file
-//! system is). This module will be loaded by the kernel at a specific virtual address (0x10000)
-//! before being executed.
+//! Because of the architecture-specific nature of the kernel, this documentation is only
+//! relevent for the `x86_64` architecture.
 
 #![no_std]
 #![no_main]
