@@ -15,7 +15,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Check `neodym`
-      run: cargo check --verbose --target targets/x86_64.json -Zbuild-std=core,alloc,compiler_builtins -Zbuild-std-features=compiler-builtins-mem
-    - name: Check `nd_init`
-      run: cargo check --verbose --target targets/x86_64.json -Zbuild-std=core,alloc,compiler_builtins -Zbuild-std-features=compiler-builtins-mem
+    - name: Check `neodym` on `x86_64`
+      run: cargo check --verbose --package neodym --target targets/x86_64.json -Zbuild-std=core,alloc,compiler_builtins -Zbuild-std-features=compiler-builtins-mem
+    - name: Check `nd_init` on `x86_64`
+      run: cargo check --verbose --package nd_init --target targets/x86_64.json -Zbuild-std=core,alloc,compiler_builtins -Zbuild-std-features=compiler-builtins-mem
