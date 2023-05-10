@@ -5,8 +5,8 @@ use nd_x86_64::{PhysAddr, VirtAddr};
 
 /// Stores information about the kernel, relevant to the `x86_64` architecture.
 ///
-/// This type is normally accessed through the [`KernelInfoTok`] token type.
-pub struct KernelInfo {
+/// This type is normally accessed through the [`SysInfoTok`] token type.
+pub struct SysInfo {
     /// The starting address of the higher half direct map in the kernel's address space.
     ///
     /// This is also used when mapping to the kernel in processes.
@@ -19,18 +19,18 @@ pub struct KernelInfo {
     pub kernel_virt_addr: VirtAddr,
 }
 
-static mut KERNEL_INFO: MaybeUninit<KernelInfo> = MaybeUninit::uninit();
+static mut SYS_INFO: MaybeUninit<SysInfo> = MaybeUninit::uninit();
 
-/// A "token type" proving that the global [`KernelInfo`] structure has been initialized.
+/// A "token type" proving that the global [`SysInfoTok`] structure has been initialized.
 #[derive(Clone, Copy)]
-pub struct KernelInfoTok(());
+pub struct SysInfoTok(());
 
-impl KernelInfoTok {
-    /// Creates a new [`KernelInfoTok`] instance.
+impl SysInfoTok {
+    /// Creates a new [`SysInfoTok`] instance.
     ///
     /// # Safety
     ///
-    /// The [`KernelInfoTok::initialize`] function must have been called before this function is
+    /// The [`SysInfoTok::initialize`] function must have been called before this function is
     /// called.
     #[inline(always)]
     pub unsafe fn unchecked() -> Self {
@@ -44,19 +44,19 @@ impl KernelInfoTok {
     ///
     /// This function must only be called once!
     #[inline(always)]
-    pub unsafe fn initialize(kernel_info: KernelInfo) -> Self {
+    pub unsafe fn initialize(sys_info: SysInfo) -> Self {
         unsafe {
-            KERNEL_INFO.write(kernel_info);
+            SYS_INFO.write(sys_info);
             Self::unchecked()
         }
     }
 }
 
-impl Deref for KernelInfoTok {
-    type Target = KernelInfo;
+impl Deref for SysInfoTok {
+    type Target = SysInfo;
 
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
-        unsafe { KERNEL_INFO.assume_init_ref() }
+        unsafe { SYS_INFO.assume_init_ref() }
     }
 }
