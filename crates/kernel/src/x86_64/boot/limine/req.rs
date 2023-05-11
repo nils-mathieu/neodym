@@ -1,4 +1,4 @@
-use nd_limine::{BootloaderInfo, EntryPoint, Hhdm, KernelAddress, MemoryMap, Module, Request};
+use nd_limine::{BootloaderInfo, EntryPoint, KernelAddress, MemoryMap, Module, Request};
 
 /// Requests the bootloader to provide information about itself, such as its name and version.
 /// Those information will be logged at startup.

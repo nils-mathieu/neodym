@@ -1,39 +1,14 @@
-use core::alloc::AllocError;
-use core::fmt;
 use core::mem::{size_of, MaybeUninit};
 use core::ops::Deref;
-use core::sync::atomic::Ordering::{Acquire, Relaxed, Release};
-use core::sync::atomic::{AtomicPtr, AtomicUsize};
+use core::sync::atomic::AtomicPtr;
+use core::sync::atomic::Ordering::{Acquire, Release};
 
 use nd_array::Vec;
 use nd_spin::Mutex;
-use nd_x86_64::{PageTable, PageTableFlags, PhysAddr, VirtAddr};
+use nd_x86_64::PhysAddr;
 
+use super::{OutOfPhysicalMemory, PageProvider};
 use crate::x86_64::SysInfoTok;
-
-use super::MemoryMapper;
-
-/// The system is out of available physical memory.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OutOfPhysicalMemory;
-
-impl From<OutOfPhysicalMemory> for AllocError {
-    #[inline(always)]
-    fn from(_: OutOfPhysicalMemory) -> Self {
-        AllocError
-    }
-}
-
-/// A memory segment that is useable by the kernel.
-#[derive(Debug, Clone, Copy)]
-pub struct MemorySegment {
-    /// The base address of the segment.
-    ///
-    /// This is a *physcal* address.
-    pub base: PhysAddr,
-    /// The size of the segment.
-    pub length: u64,
-}
 
 /// A node that's part of the free page list.
 ///
@@ -69,13 +44,8 @@ impl FreePageListNode {
 ///
 /// This type is normally accessed through the [`PageAllocatorTok`] token type.
 pub struct PageAllocator {
-    /// A list of all usable memory segments.
-    segments: Vec<MemorySegment, { Self::MAX_SEGMENT_COUNT }>,
-    /// The next free page available for allocation.
-    ///
-    /// This the nth page in the `segments` array. When a couple of pages need to be allocated
-    /// together, this field is used to easily find the next free page.
-    next_free: AtomicUsize,
+    /// The page provider used to allocate fresh physical pages.
+    page_provider: PageProvider,
     /// The list of free pages.
     free_pages: AtomicPtr<FreePageListNode>,
 
@@ -84,60 +54,16 @@ pub struct PageAllocator {
 }
 
 impl PageAllocator {
-    /// The maximum number of segments that can be managed by the page allocator.
-    ///
-    /// There normally won't be more than 4 to 8 segments. So 16 is a very safe number.
-    pub const MAX_SEGMENT_COUNT: usize = 16;
-
     /// Returns a token proving that the global system info structure has been initialized.
     #[inline(always)]
     pub fn sys_info(&self) -> SysInfoTok {
         self.sys_info
     }
 
-    /// Attempts to allocate a contiguous region of physical memory.
-    ///
-    /// Note that this function may fail even if there is enough free memory available. Even
-    /// contigous! This function only checks the "segment" list, and works if the current
-    /// segment has enough free pages. If the current segment doesn't have enough free pages,
-    /// this function will simply fail.
-    pub fn allocate_contiguous(&self, count: u64) -> Result<PhysAddr, OutOfPhysicalMemory> {
-        // The index of the page that will be allocated.
-        //
-        // Relaxed ordering is sufficient here because we only care about the order of the
-        // operations on this specific atomic variable. If another threads attempts to allocate
-        // a page, their operation will be ordered with respect to this one, and we don't really
-        // care if it happens before or after.
-        let mut page_index = self.next_free.fetch_add(1, Relaxed) as u64;
-
-        // This executes in O(n), with n being the number of segments.
-        // This is fine, as we don't expect to have more than `MAX_SEGMENT_COUNT` segments. It will
-        // usually be 4 to 8 segments.
-        for segment in &self.segments {
-            let page_count = segment.length / 4096;
-
-            if page_index < page_count && page_index + count <= page_count {
-                // We found the right segment!
-                return Ok(segment.base + page_index * 4096);
-            }
-
-            page_index -= page_count;
-            // not in this segment
-        }
-
-        // This races with the `fetch_add` above, but if other threads are able to allocate enough
-        // pages to overflow an `usize` by the time we get here, then the system is probably having
-        // bigger issues than this.
-        //
-        // If `next_free` overflows, then used segments will start being allocated again. This is
-        // actually pretty bad, but there's not much we can do about it without using a lock.
-        //
-        // I think locking would actually be fine, but it's so unlikely that this will be an issue
-        // that the lock-free implementation is probably worth it.
-        self.next_free.store(page_index as usize, Relaxed);
-
-        // We're out of memory :(
-        Err(OutOfPhysicalMemory)
+    /// Returns the page provider used by this allocator.
+    #[inline(always)]
+    pub fn page_provider(&self) -> &PageProvider {
+        &self.page_provider
     }
 
     /// Allocates a new physical page.
@@ -172,7 +98,7 @@ impl PageAllocator {
         //  pages, then either we're out of memory (or close to it), or we still have a lot of
         //  memory available in the usable segments.
 
-        self.allocate_contiguous(1)
+        self.page_provider.allocate()
     }
 
     /// Deallocates a physical address.
@@ -204,48 +130,6 @@ impl PageAllocator {
 
         cur.store(page_node_ptr, Release);
     }
-}
-
-/// Returns a [`fmt::Debug`] implementation that displays the given number of bytes in a human
-/// readable format.
-fn human_bytes(bytes: u64) -> impl fmt::Display {
-    struct Bytes(u64);
-
-    impl fmt::Display for Bytes {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            let mut bytes = self.0;
-
-            let mut write_dec =
-                |n: u64, dim: &str| write!(f, "{}.{} {}", n / 1024, ((n % 1024) * 100) / 1024, dim);
-
-            if bytes < 1024 {
-                return write!(f, "{} B", bytes);
-            }
-
-            if bytes < 1024 * 1024 {
-                return write_dec(bytes, "KiB");
-            }
-
-            bytes /= 1024;
-
-            if bytes < 1024 * 1024 {
-                return write_dec(bytes, "MiB");
-            }
-
-            bytes /= 1024;
-
-            if bytes < 1024 * 1024 {
-                return write_dec(bytes, "GiB");
-            }
-
-            bytes /= 1024;
-
-            // wtf so much memory
-            write_dec(bytes, "TiB")
-        }
-    }
-
-    Bytes(bytes)
 }
 
 /// The global page allocator.
@@ -287,39 +171,8 @@ impl PageAllocatorTok {
     ///
     /// Also, after this function has been called, the page tables will be logically owned by the
     /// page allocator. Accessing it outside of the module will trigger undefined behavior.
-    pub unsafe fn initialize(
-        sys_info: SysInfoTok,
-        usable: &mut dyn Iterator<Item = MemorySegment>,
-    ) -> Self {
+    pub unsafe fn initialize(sys_info: SysInfoTok, page_provider: PageProvider) -> Self {
         nd_log::trace!("Initializing the page allocator...");
-
-        let mut segments = Vec::<MemorySegment, { PageAllocator::MAX_SEGMENT_COUNT }>::new();
-        let mut pages = 0;
-        for segment in usable.take(segments.capacity()) {
-            pages += segment.length / 0x1000;
-
-            if let Some(last) = segments.last_mut() {
-                // Attempt to merge the current segment with the last one.
-                if last.base + last.length == segment.base {
-                    last.length += segment.length;
-                    continue;
-                }
-            }
-
-            unsafe { segments.push_unchecked(segment) };
-        }
-
-        let remaining = usable.count();
-        if remaining != 0 {
-            nd_log::warn!("Too many usable memory regions, {remaining} have been ignored.");
-        }
-
-        nd_log::info!(
-            "{} pages of usable memory, in {} contiguous segments, {} in total.",
-            pages,
-            segments.len(),
-            human_bytes(pages * 0x1000)
-        );
 
         // SAFETY:
         //  This function can only be called once, ensuring that we're not:
@@ -330,8 +183,7 @@ impl PageAllocatorTok {
         // shared references.
         unsafe {
             PAGE_ALLOCATOR.write(PageAllocator {
-                segments,
-                next_free: AtomicUsize::new(0),
+                page_provider,
                 free_pages: AtomicPtr::new(core::ptr::null_mut()),
                 sys_info,
             });

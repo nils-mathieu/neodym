@@ -3,8 +3,11 @@
 //!
 
 use nd_limine::{File, MemMapEntryType};
+use nd_x86_64::{PhysAddr, VirtAddr};
 
-use crate::x86_64::{MemorySegment, PageAllocatorTok, SysInfo, SysInfoTok};
+use crate::x86_64::{
+    MappingError, MemorySegment, PageAllocatorTok, PageProvider, SysInfo, SysInfoTok,
+};
 
 mod req;
 
@@ -126,6 +129,8 @@ extern "C" fn entry_point_inner() -> ! {
             length: e.length(),
         });
 
+    let page_provider = PageProvider::new(&mut available_mem);
+
     // Initialize the global kernel info object.
     //
     // This is used throughout the kernel to access information about the kernel and the system
@@ -152,7 +157,7 @@ extern "C" fn entry_point_inner() -> ! {
         crate::die();
     }
 
-    let _page_allocator = unsafe { PageAllocatorTok::initialize(sys_info, &mut available_mem) };
+    let _page_allocator = unsafe { PageAllocatorTok::initialize(sys_info, page_provider) };
 
     // Initialize the CPU in a well-known state.
     //

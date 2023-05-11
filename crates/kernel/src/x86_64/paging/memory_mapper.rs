@@ -19,44 +19,141 @@ impl From<OutOfPhysicalMemory> for MappingError {
     }
 }
 
-/// Represents a leaf entry in a page table.
-#[repr(transparent)]
-pub struct MemoryMapperEntry {
-    entry: PageTableEntry,
-    allocator: PageAllocatorTok,
-}
+pub mod raw_mapping {
+    //! This module provides utility functions to create mappings without a
+    //! [`MemoryMapper`](super::MemoryMapper). This is useful when a mapping needs to be created
+    //! before the global page allocator has been initialized.
 
-impl MemoryMapperEntry {
-    /// Creates a new [`MemoryMapperEntry`] instance.
-    #[inline(always)]
-    fn new_mut(inner: &mut PageTableEntry) -> &mut Self {
-        unsafe { &mut *(inner as *mut PageTableEntry as *mut Self) }
+    #![allow(clippy::too_many_arguments)]
+
+    use nd_x86_64::{PageTable, PageTableEntry, PageTableFlags, PhysAddr, VirtAddr};
+
+    use super::MappingError;
+    use crate::x86_64::{OutOfPhysicalMemory, PageProvider};
+
+    /// Inserts a new entry in the page table.
+    ///
+    /// # Safety
+    ///
+    /// Given a valid physical page, `phys_to_virt` must return a valid virtual address for it.
+    ///
+    /// `l4` must be the physical address of a valid page table.
+    ///
+    /// The memory allocated by the page provider must remain valid for the lifetime `'a`.
+    pub unsafe fn entry<'a>(
+        l4: PhysAddr,
+        provider: &PageProvider,
+        phys_to_virt: &mut dyn FnMut(PhysAddr) -> VirtAddr,
+        virtual_address: VirtAddr,
+        parent_flags: PageTableFlags,
+    ) -> Result<&'a mut PageTableEntry, OutOfPhysicalMemory> {
+        let l4_idx = (virtual_address >> 39) & 0o777;
+        let l3_idx = (virtual_address >> 30) & 0o777;
+        let l2_idx = (virtual_address >> 21) & 0o777;
+        let l1_idx = (virtual_address >> 12) & 0o777;
+
+        let mut table = unsafe { &mut *(phys_to_virt(l4) as *mut PageTable) };
+        for index in [l4_idx as usize, l3_idx as usize, l2_idx as usize] {
+            let entry = unsafe { table.0.get_unchecked_mut(index) };
+
+            table = if *entry == PageTableEntry::UNUSED {
+                // The provided virtual address is not mapped. We need to allocate a page table
+                // for this entry.
+                let page = provider.allocate()?;
+                let new_table_ptr = phys_to_virt(page) as *mut PageTable;
+
+                // The page table is initially filled with zeroes.
+                unsafe { core::ptr::write_bytes(new_table_ptr, 0x00, 1) };
+
+                // Create the entry for the newly created page table.
+                *entry = PageTableEntry::new(page, parent_flags);
+
+                unsafe { &mut *new_table_ptr }
+            } else {
+                // A page table was already present as this level for the provided virtual address.
+                unsafe { &mut *(phys_to_virt(entry.addr()) as *mut PageTable) }
+            };
+        }
+
+        Ok(unsafe { table.0.get_unchecked_mut(l1_idx as usize) })
     }
 
-    /// Returns the virtual address of the page within the kernel address space.
-    #[inline(always)]
-    pub fn kernel_virtual_address(&mut self) -> VirtAddr {
-        self.entry.addr() + self.allocator.sys_info().hhdm_offset
+    /// Attempts to insert a new mapping into the provided page table.
+    ///
+    /// # Safety
+    ///
+    /// Given a valid physical page, `phys_to_virt` must return a valid virtual address for it.
+    ///
+    /// `l4` must be the physical address of a valid page table.
+    ///
+    /// The memory allocated by the page provider must remain valid for the lifetime `'a`.
+    pub unsafe fn create_mapping_with<'a, F>(
+        l4_table: PhysAddr,
+        provider: &PageProvider,
+        phys_to_virt: &mut dyn FnMut(PhysAddr) -> VirtAddr,
+        virt: VirtAddr,
+        parent_flags: PageTableFlags,
+        into_entry: F,
+    ) -> Result<&'a mut PageTableEntry, MappingError>
+    where
+        F: FnOnce() -> Result<PageTableEntry, MappingError>,
+    {
+        let entry = unsafe { entry(l4_table, provider, phys_to_virt, virt, parent_flags)? };
+        if *entry != PageTableEntry::UNUSED {
+            return Err(MappingError::AlreadyMapped(entry.addr()));
+        }
+
+        *entry = into_entry()?;
+
+        Ok(entry)
+    }
+
+    /// Maps `count` pages and maps them at `virt` in the given page table.
+    ///
+    /// # Safety
+    ///
+    /// Given a valid physical page, `phys_to_virt` must return a valid virtual address for it.
+    ///
+    /// `l4` must be the physical address of a valid page table.
+    pub unsafe fn allocate_range<F>(
+        l4_table: PhysAddr,
+        provider: &PageProvider,
+        phys_to_virt: &mut dyn FnMut(PhysAddr) -> VirtAddr,
+        virt: VirtAddr,
+        count: u64,
+        parent_flags: PageTableFlags,
+        flags: PageTableFlags,
+        mut f: F,
+    ) -> Result<(), MappingError>
+    where
+        F: FnMut(PhysAddr),
+    {
+        let mut virt_addr = virt;
+
+        for _ in 0..count {
+            let entry = unsafe {
+                create_mapping_with(
+                    l4_table,
+                    provider,
+                    phys_to_virt,
+                    virt_addr,
+                    parent_flags,
+                    move || {
+                        let page = provider.allocate()?;
+                        Ok(PageTableEntry::new(page, flags))
+                    },
+                )?
+            };
+
+            f(entry.addr());
+            virt_addr += 0x1000;
+        }
+
+        Ok(())
     }
 }
 
-impl Deref for MemoryMapperEntry {
-    type Target = PageTableEntry;
-
-    #[inline(always)]
-    fn deref(&self) -> &Self::Target {
-        &self.entry
-    }
-}
-
-impl DerefMut for MemoryMapperEntry {
-    #[inline(always)]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.entry
-    }
-}
-
-/// The flag that we're using to determine whether a given page should be deallocate when a
+/// The flag that we're using to determine whether a given page should be deallocated when a
 /// [`MemoryMapper`] is dropped.
 const OWNED: PageTableFlags = PageTableFlags::USER_0;
 
@@ -126,7 +223,7 @@ impl MemoryMapper {
     pub fn entry(
         &mut self,
         virtual_address: VirtAddr,
-    ) -> Result<&mut MemoryMapperEntry, OutOfPhysicalMemory> {
+    ) -> Result<&mut PageTableEntry, OutOfPhysicalMemory> {
         let hhdm = self.page_allocator.sys_info().hhdm_offset;
 
         // Those are the flags that we'll give to non-leaf entries.
@@ -135,147 +232,15 @@ impl MemoryMapper {
             | PageTableFlags::USER_ACCESSIBLE
             | OWNED;
 
-        let l4_idx = (virtual_address >> 39) & 0o777;
-        let l3_idx = (virtual_address >> 30) & 0o777;
-        let l2_idx = (virtual_address >> 21) & 0o777;
-        let l1_idx = (virtual_address >> 12) & 0o777;
-
-        let mut table = unsafe { &mut *((self.l4_table + hhdm) as *mut PageTable) };
-        for index in [l4_idx as usize, l3_idx as usize, l2_idx as usize] {
-            let entry = unsafe { table.0.get_unchecked_mut(index) };
-
-            table = if *entry == PageTableEntry::UNUSED {
-                // The provided virtual address is not mapped. We need to allocate a page table
-                // for this entry.
-                let page = self.page_allocator.allocate()?;
-                let new_table_ptr = (page + hhdm) as *mut PageTable;
-
-                // The page table is initially filled with zeroes.
-                unsafe { core::ptr::write_bytes(new_table_ptr, 0x00, 1) };
-
-                // Create the entry for the newly created page table.
-                *entry = PageTableEntry::new(page, parent_flags);
-
-                unsafe { &mut *new_table_ptr }
-            } else {
-                // A page table was already present as this level for the provided virtual address.
-                unsafe { &mut *((entry.addr() + hhdm) as *mut PageTable) }
-            };
+        unsafe {
+            raw_mapping::entry(
+                self.l4_table,
+                self.page_allocator.page_provider(),
+                &mut move |phys| phys + hhdm,
+                virtual_address,
+                parent_flags,
+            )
         }
-
-        Ok(MemoryMapperEntry::new_mut(unsafe {
-            table.0.get_unchecked_mut(l1_idx as usize)
-        }))
-    }
-
-    /// Creates a new mapping for the provided virtual address.
-    ///
-    /// This function does not allocate any physical page for the final mapping.
-    pub fn create_mapping(
-        &mut self,
-        virt: VirtAddr,
-        phys: PhysAddr,
-        flags: PageTableFlags,
-    ) -> Result<&mut MemoryMapperEntry, MappingError> {
-        let entry = self.entry(virt)?;
-        if **entry != PageTableEntry::UNUSED {
-            return Err(MappingError::AlreadyMapped(entry.addr()));
-        }
-
-        **entry = PageTableEntry::new(phys, flags);
-
-        Ok(entry)
-    }
-
-    /// Creates a new mapping for the provided virtual address.
-    pub fn allocate_mapping(
-        &mut self,
-        virt: VirtAddr,
-        flags: PageTableFlags,
-    ) -> Result<&mut MemoryMapperEntry, MappingError> {
-        let page_allocator = self.page_allocator;
-
-        let entry = self.entry(virt)?;
-        if **entry != PageTableEntry::UNUSED {
-            return Err(MappingError::AlreadyMapped(entry.addr()));
-        }
-
-        **entry = PageTableEntry::new(page_allocator.allocate()?, flags | OWNED);
-
-        Ok(entry)
-    }
-
-    /// Loads the requested number of pages starting at the provided virtual address. On each
-    /// page, the provided function is called with the entry for the page.
-    pub fn load_at_with<F>(
-        &mut self,
-        at: VirtAddr,
-        count: u64,
-        flags: PageTableFlags,
-        mut with: F,
-    ) -> Result<(), MappingError>
-    where
-        F: FnMut(&mut MemoryMapperEntry),
-    {
-        let mut virt_addr = at;
-
-        for _ in 0..count {
-            let page = self.allocate_mapping(virt_addr, flags)?;
-            with(page);
-            virt_addr += 0x1000;
-        }
-
-        Ok(())
-    }
-
-    /// Loads the provided data at the provided virtual address.
-    ///
-    /// This function allocates physical pages as needed. Note that those physical pages are not
-    /// guarenteed to be contiguous.
-    pub fn load_at(
-        &mut self,
-        data: &[u8],
-        at: VirtAddr,
-        flags: PageTableFlags,
-    ) -> Result<(), MappingError> {
-        let count = (data.len() + 0xfff) / 0x1000;
-        let mut remainder = data;
-
-        self.load_at_with(at, count as u64, flags, |page| unsafe {
-            let to_copy = core::cmp::min(remainder.len(), 0x1000);
-
-            // SAFETY:
-            //  We're copying a chunk of the input data into the page.
-            core::ptr::copy_nonoverlapping(
-                remainder.as_ptr(),
-                page.kernel_virtual_address() as usize as *mut u8,
-                to_copy,
-            );
-
-            remainder = remainder.get_unchecked(to_copy..);
-        })
-    }
-
-    /// Maps the kernel into this address space.
-    pub fn map_kernel(&mut self) -> Result<(), MappingError> {
-        let info = self.page_allocator.sys_info();
-
-        let mut phys_addr = info.kernel_phys_addr;
-        let mut virt_addr = info.kernel_virt_addr;
-        let mut remainder = info.kernel_virt_end_addr - info.kernel_virt_addr;
-
-        while remainder > 0 {
-            let size = core::cmp::min(remainder, 0x1000);
-            let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
-
-            self.create_mapping(virt_addr, phys_addr, flags)?;
-
-            phys_addr += size;
-            virt_addr += size;
-            remainder -= size;
-        }
-
-        Ok(())
     }
 }
 
