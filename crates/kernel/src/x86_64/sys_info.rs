@@ -14,12 +14,6 @@ pub struct SysInfo {
     pub kernel_virt_end_addr: VirtAddr,
     /// The virtual address of the kernel.
     pub kernel_virt_addr: VirtAddr,
-
-    /// The offset of the Higher Half Direct Map.
-    pub hhdm_offset: VirtAddr,
-
-    /// The total amount of physical memory available on the system.
-    pub available_memory: usize,
 }
 
 impl SysInfo {

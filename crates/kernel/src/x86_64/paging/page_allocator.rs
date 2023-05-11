@@ -124,7 +124,7 @@ impl PageAllocator {
 
         // We got to the end of the free list, and we didn't find a node that can store our
         // new page. We need to allocate a new node. We'll use the deallocated node for this.
-        let page_node_ptr = (addr + self.sys_info.hhdm_offset) as *mut FreePageListNode;
+        let page_node_ptr = addr as *mut FreePageListNode; // Identity mapped.
 
         unsafe { page_node_ptr.write(FreePageListNode::new()) };
 

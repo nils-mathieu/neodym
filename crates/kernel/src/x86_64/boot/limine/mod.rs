@@ -3,11 +3,8 @@
 //!
 
 use nd_limine::{File, MemMapEntryType};
-use nd_x86_64::{PhysAddr, VirtAddr};
 
-use crate::x86_64::{
-    MappingError, MemorySegment, PageAllocatorTok, PageProvider, SysInfo, SysInfoTok,
-};
+use crate::x86_64::{MemorySegment, PageAllocatorTok, PageProvider, SysInfo, SysInfoTok};
 
 mod req;
 
@@ -136,14 +133,10 @@ extern "C" fn entry_point_inner() -> ! {
     // This is used throughout the kernel to access information about the kernel and the system
     // that the kernel is running on.
     let sys_info = unsafe {
-        let kernel_virt_end_addr = SysInfo::read_kernel_virt_end_addr();
-
         SysInfoTok::initialize(SysInfo {
             kernel_phys_addr: kernel_addr.physical_base(),
             kernel_virt_addr: SysInfo::read_kernel_virt_addr(),
-            kernel_virt_end_addr,
-            hhdm_offset: (kernel_virt_end_addr + 0xfff) & !0xfff,
-            available_memory: available_mem.clone().map(|e| e.length as usize).sum(),
+            kernel_virt_end_addr: SysInfo::read_kernel_virt_end_addr(),
         })
     };
 

@@ -2,11 +2,9 @@ use core::alloc::AllocError;
 
 use nd_x86_64::PhysAddr;
 
-mod memory_mapper;
 mod page_allocator;
 mod page_provider;
 
-pub use self::memory_mapper::*;
 pub use self::page_allocator::*;
 pub use self::page_provider::*;
 

@@ -114,6 +114,7 @@ impl PageProvider {
 
             if page_index < page_count {
                 // We found the right segment for the index!
+
                 return Ok(segment.base + page_index * 4096);
             }
 
