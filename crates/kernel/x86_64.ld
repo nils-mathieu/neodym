@@ -12,8 +12,7 @@ PHDRS
 SECTIONS
 {
     . = 0xffffffff80000000;
-    __image_start = .;
-    __nd_image_size = __image_end - __image_start;
+    __nd_image_start = .;
 
     .text : {
         .limine_reqs
@@ -37,7 +36,7 @@ SECTIONS
         *(.bss .bss.*)
     } :data
 
-    __image_end = .;
+    __nd_image_end = .;
 
     /DISCARD/ : {
         *(.eh_frame)

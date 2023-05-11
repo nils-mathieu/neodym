@@ -7,16 +7,39 @@ use nd_x86_64::{PhysAddr, VirtAddr};
 ///
 /// This type is normally accessed through the [`SysInfoTok`] token type.
 pub struct SysInfo {
-    /// The starting address of the higher half direct map in the kernel's address space.
-    ///
-    /// This is also used when mapping to the kernel in processes.
-    pub hhdm_offset: VirtAddr,
-    /// The number of bytes that the kernel takes, in memory.
-    pub kernel_size: usize,
     /// The starting physical address of the kernel in physical memory.
     pub kernel_phys_addr: PhysAddr,
+    /// The virtual address of the end of the kernel. This is one byte past the end of the
+    /// kernel image in virtual memory.
+    pub kernel_virt_end_addr: VirtAddr,
     /// The virtual address of the kernel.
     pub kernel_virt_addr: VirtAddr,
+
+    /// The offset of the Higher Half Direct Map.
+    pub hhdm_offset: VirtAddr,
+
+    /// The total amount of physical memory available on the system.
+    pub available_memory: usize,
+}
+
+impl SysInfo {
+    /// Reads the kernel virtual address from the linker script.
+    pub fn read_kernel_virt_addr() -> VirtAddr {
+        extern "C" {
+            static mut __nd_image_start: u8;
+        }
+
+        unsafe { &__nd_image_start as *const _ as usize as VirtAddr }
+    }
+
+    /// Reads the kernel end virtual address from the linker script.
+    pub fn read_kernel_virt_end_addr() -> VirtAddr {
+        extern "C" {
+            static mut __nd_image_end: u8;
+        }
+
+        unsafe { &__nd_image_end as *const _ as usize as VirtAddr }
+    }
 }
 
 /// The global system info object, protected by [`SysInfoTok`].

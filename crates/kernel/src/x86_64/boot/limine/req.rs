@@ -19,17 +19,10 @@ pub static MEMORY_MAP: Request<MemoryMap> = Request::new(MemoryMap);
 /// Requests the Limine bootloader to provide the address of the kernel in physical memory.
 pub static KERNEL_ADDR: Request<KernelAddress> = Request::new(KernelAddress);
 
-/// The Limine bootloader maps the entierty of the physical memory to the higher half of the
-/// virtual address space.
-///
-/// This request provides the address of th *Higher Half Direct Map* offset.
-pub static HHDM: Request<Hhdm> = Request::new(Hhdm);
-
 nd_limine::limine_reqs!(
     MEMORY_MAP,
     BOOTLOADER_INFO,
     MODULE,
     ENTRY_POINT,
-    HHDM,
     KERNEL_ADDR
 );

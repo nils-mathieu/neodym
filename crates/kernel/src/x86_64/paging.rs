@@ -7,9 +7,11 @@ use core::sync::atomic::{AtomicPtr, AtomicUsize};
 
 use nd_array::Vec;
 use nd_spin::Mutex;
-use nd_x86_64::PhysAddr;
+use nd_x86_64::{PageTable, PageTableFlags, PhysAddr, VirtAddr};
 
 use crate::x86_64::SysInfoTok;
+
+use super::MemoryMapper;
 
 /// The system is out of available physical memory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,7 +80,7 @@ pub struct PageAllocator {
     free_pages: AtomicPtr<FreePageListNode>,
 
     /// Proves that the global system info structure has been initialized.
-    info: SysInfoTok,
+    sys_info: SysInfoTok,
 }
 
 impl PageAllocator {
@@ -89,8 +91,8 @@ impl PageAllocator {
 
     /// Returns a token proving that the global system info structure has been initialized.
     #[inline(always)]
-    pub fn sysinfo(&self) -> SysInfoTok {
-        self.info
+    pub fn sys_info(&self) -> SysInfoTok {
+        self.sys_info
     }
 
     /// Attempts to allocate a contiguous region of physical memory.
@@ -196,7 +198,7 @@ impl PageAllocator {
 
         // We got to the end of the free list, and we didn't find a node that can store our
         // new page. We need to allocate a new node. We'll use the deallocated node for this.
-        let page_node_ptr = (addr + self.info.hhdm_offset) as *mut FreePageListNode;
+        let page_node_ptr = (addr + self.sys_info.hhdm_offset) as *mut FreePageListNode;
 
         unsafe { page_node_ptr.write(FreePageListNode::new()) };
 
@@ -275,8 +277,6 @@ impl PageAllocatorTok {
     ///
     /// # Safety
     ///
-    /// The kernel info structure must've been initialized.
-    ///
     /// This function expects to be called only once.
     ///
     /// Note that this function will take ownership of all provided useable memory regions. This means
@@ -287,10 +287,8 @@ impl PageAllocatorTok {
     ///
     /// Also, after this function has been called, the page tables will be logically owned by the
     /// page allocator. Accessing it outside of the module will trigger undefined behavior.
-    ///
-    /// A higher-half direct map must be set up at `hhdm`.
     pub unsafe fn initialize(
-        info: SysInfoTok,
+        sys_info: SysInfoTok,
         usable: &mut dyn Iterator<Item = MemorySegment>,
     ) -> Self {
         nd_log::trace!("Initializing the page allocator...");
@@ -335,7 +333,7 @@ impl PageAllocatorTok {
                 segments,
                 next_free: AtomicUsize::new(0),
                 free_pages: AtomicPtr::new(core::ptr::null_mut()),
-                info,
+                sys_info,
             });
             Self::unchecked()
         }

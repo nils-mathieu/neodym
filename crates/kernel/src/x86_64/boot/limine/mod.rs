@@ -2,9 +2,9 @@
 //! [Limine](https://github.com/limine-bootloader/limine/blob/v4.x-branch/PROTOCOL.md) bootloader.
 //!
 
-use nd_limine::File;
+use nd_limine::{File, MemMapEntryType};
 
-use crate::x86_64::{SysInfo, SysInfoTok};
+use crate::x86_64::{MemorySegment, PageAllocatorTok, SysInfo, SysInfoTok};
 
 mod req;
 
@@ -95,12 +95,7 @@ extern "C" fn entry_point_inner() -> ! {
         crate::die();
     };
 
-    let Some(hhdm) = req::HHDM.response() else {
-        nd_log::error!("The Limine bootloader did not provide the HHDM offset.");
-        crate::die();
-    };
-
-    let Some(_memmap) = req::MEMORY_MAP.response() else {
+    let Some(memmap) = req::MEMORY_MAP.response() else {
         nd_log::error!("The Limine bootloader did not provide a map of the usable memory.");
         crate::die();
     };
@@ -118,18 +113,46 @@ extern "C" fn entry_point_inner() -> ! {
         crate::die();
     };
 
+    // This iterator goes over every memory segment that is available for the kernel to use.
+    let mut available_mem = memmap
+        .entries()
+        .iter()
+        .map(|&&e| e)
+        .filter(|e| {
+            e.ty() == MemMapEntryType::USABLE || e.ty() == MemMapEntryType::BOOTLOADER_RECLAIMABLE
+        })
+        .map(|e| MemorySegment {
+            base: e.base(),
+            length: e.length(),
+        });
+
     // Initialize the global kernel info object.
     //
     // This is used throughout the kernel to access information about the kernel and the system
     // that the kernel is running on.
-    let _sys_info = unsafe {
+    let sys_info = unsafe {
+        let kernel_virt_end_addr = SysInfo::read_kernel_virt_end_addr();
+
         SysInfoTok::initialize(SysInfo {
             kernel_phys_addr: kernel_addr.physical_base(),
-            kernel_virt_addr: kernel_addr.virtual_base(),
-            kernel_size: crate::x86_64::image_size(),
-            hhdm_offset: hhdm.offset(),
+            kernel_virt_addr: SysInfo::read_kernel_virt_addr(),
+            kernel_virt_end_addr,
+            hhdm_offset: (kernel_virt_end_addr + 0xfff) & !0xfff,
+            available_memory: available_mem.clone().map(|e| e.length as usize).sum(),
         })
     };
+
+    if sys_info.kernel_virt_addr != kernel_addr.virtual_base() {
+        nd_log::error!("The kernel was not loaded at the expected address.");
+        nd_log::error!("  > Expected: {:#x}", sys_info.kernel_virt_addr);
+        nd_log::error!("  > Actual:   {:#x}", kernel_addr.virtual_base());
+        nd_log::error!("How is this code even running?");
+        nd_log::error!("");
+        nd_log::error!("This is a bug in your bootloader.");
+        crate::die();
+    }
+
+    let _page_allocator = unsafe { PageAllocatorTok::initialize(sys_info, &mut available_mem) };
 
     // Initialize the CPU in a well-known state.
     //
