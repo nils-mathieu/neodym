@@ -2,9 +2,11 @@ use core::alloc::AllocError;
 
 use nd_x86_64::PhysAddr;
 
+mod identity_map;
 mod page_allocator;
 mod page_provider;
 
+pub use self::identity_map::*;
 pub use self::page_allocator::*;
 pub use self::page_provider::*;
 

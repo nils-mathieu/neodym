@@ -113,6 +113,18 @@ extern "C" fn entry_point_inner() -> ! {
         crate::die();
     };
 
+    let kernel_virt_addr = SysInfo::read_kernel_virt_addr();
+
+    if kernel_virt_addr != kernel_addr.virtual_base() {
+        nd_log::error!("The kernel was not loaded at the expected address.");
+        nd_log::error!("  > Expected: {:#x}", kernel_virt_addr);
+        nd_log::error!("  > Actual:   {:#x}", kernel_addr.virtual_base());
+        nd_log::error!("How is this code even running?");
+        nd_log::error!("");
+        nd_log::error!("This is a bug in your bootloader.");
+        crate::die();
+    }
+
     // This iterator goes over every memory segment that is available for the kernel to use.
     let mut available_mem = memmap
         .entries()
@@ -128,6 +140,29 @@ extern "C" fn entry_point_inner() -> ! {
 
     let page_provider = PageProvider::new(&mut available_mem);
 
+    let kernel_virt_end_addr = SysInfo::read_kernel_virt_end_addr();
+
+    let physical_memory_size = match memmap.entries().last() {
+        Some(e) => e.base() + e.length(),
+        None => 0,
+    };
+
+    unsafe {
+        if let Err(_err) = crate::x86_64::setup_paging(
+            &page_provider,
+            &mut core::convert::identity, // Limine identity-maps the physical memory.
+            physical_memory_size,
+            kernel_addr.physical_base(),
+            kernel_virt_addr,
+            kernel_virt_end_addr - kernel_virt_addr,
+        ) {
+            nd_log::error!("Not enough memory to setup paging.");
+            #[cfg(debug_assertions)]
+            nd_log::error!("  > Error: {:?}", _err);
+            crate::die();
+        }
+    }
+
     // Initialize the global kernel info object.
     //
     // This is used throughout the kernel to access information about the kernel and the system
@@ -139,16 +174,6 @@ extern "C" fn entry_point_inner() -> ! {
             kernel_virt_end_addr: SysInfo::read_kernel_virt_end_addr(),
         })
     };
-
-    if sys_info.kernel_virt_addr != kernel_addr.virtual_base() {
-        nd_log::error!("The kernel was not loaded at the expected address.");
-        nd_log::error!("  > Expected: {:#x}", sys_info.kernel_virt_addr);
-        nd_log::error!("  > Actual:   {:#x}", kernel_addr.virtual_base());
-        nd_log::error!("How is this code even running?");
-        nd_log::error!("");
-        nd_log::error!("This is a bug in your bootloader.");
-        crate::die();
-    }
 
     let _page_allocator = unsafe { PageAllocatorTok::initialize(sys_info, page_provider) };
 
