@@ -165,7 +165,7 @@ extern "C" fn entry_point_inner() -> ! {
         crate::x86_64::setup_system_calls();
         crate::x86_64::initialize_lapic();
 
-        if let Err(_err) = crate::x86_64::setup_paging(
+        if let Err(_err) = crate::x86_64::mapping::setup_paging(
             &page_provider,
             &mut core::convert::identity, // Limine identity-maps the physical memory.
             physical_memory_size,

@@ -110,7 +110,7 @@ unsafe fn get_page_entry<'a>(
 /// # Arguments
 ///
 /// Both `virt_addr` and `phys_addr` must be aligned to 1 GiB.
-fn map_1g(
+pub fn map_1g(
     p4: PhysAddr,
     provider: &PageProvider,
     map: &mut dyn FnMut(PhysAddr) -> VirtAddr,
@@ -134,7 +134,7 @@ fn map_1g(
 /// # Arguments
 ///
 /// Both `virt_addr` and `phys_addr` must be aligned to 2 MiB.
-fn map_2m(
+pub fn map_2m(
     l4: PhysAddr,
     provider: &PageProvider,
     map: &mut dyn FnMut(PhysAddr) -> VirtAddr,
@@ -160,7 +160,7 @@ fn map_2m(
 /// # Arguments
 ///
 /// Both `virt_addr` and `phys_addr` must be aligned to 4 KiB.
-fn map_4k(
+pub fn map_4k(
     pml4: PhysAddr,
     provider: &PageProvider,
     map: &mut dyn FnMut(PhysAddr) -> VirtAddr,
@@ -183,7 +183,7 @@ fn map_4k(
 }
 
 /// Maps the provided physical addresses to the provided virtual addresses.
-fn map_range(
+pub fn map_range(
     l4: PhysAddr,
     provider: &PageProvider,
     map: &mut dyn FnMut(PhysAddr) -> VirtAddr,
