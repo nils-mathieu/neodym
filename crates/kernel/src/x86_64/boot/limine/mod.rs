@@ -142,40 +142,17 @@ extern "C" fn entry_point_inner() -> ! {
 
     let kernel_virt_end_addr = SysInfo::read_kernel_virt_end_addr();
 
-    let physical_memory_size = match memmap.entries().last() {
+    let physical_memory_size = match memmap
+        .entries()
+        .iter()
+        .filter(|e| e.ty() != MemMapEntryType::RESERVED)
+        .last()
+    {
         Some(e) => e.base() + e.length(),
         None => 0,
     };
 
-    unsafe {
-        if let Err(_err) = crate::x86_64::setup_paging(
-            &page_provider,
-            &mut core::convert::identity, // Limine identity-maps the physical memory.
-            physical_memory_size,
-            kernel_addr.physical_base(),
-            kernel_virt_addr,
-            kernel_virt_end_addr - kernel_virt_addr,
-        ) {
-            nd_log::error!("Not enough memory to setup paging.");
-            #[cfg(debug_assertions)]
-            nd_log::error!("  > Error: {:?}", _err);
-            crate::die();
-        }
-    }
-
-    // Initialize the global kernel info object.
-    //
-    // This is used throughout the kernel to access information about the kernel and the system
-    // that the kernel is running on.
-    let sys_info = unsafe {
-        SysInfoTok::initialize(SysInfo {
-            kernel_phys_addr: kernel_addr.physical_base(),
-            kernel_virt_addr: SysInfo::read_kernel_virt_addr(),
-            kernel_virt_end_addr: SysInfo::read_kernel_virt_end_addr(),
-        })
-    };
-
-    let _page_allocator = unsafe { PageAllocatorTok::initialize(sys_info, page_provider) };
+    let kernel_phys_addr = kernel_addr.physical_base();
 
     // Initialize the CPU in a well-known state.
     //
@@ -188,6 +165,43 @@ extern "C" fn entry_point_inner() -> ! {
         crate::x86_64::setup_system_calls();
         crate::x86_64::initialize_lapic();
 
+        if let Err(_err) = crate::x86_64::setup_paging(
+            &page_provider,
+            &mut core::convert::identity, // Limine identity-maps the physical memory.
+            physical_memory_size,
+            kernel_phys_addr,
+            kernel_virt_addr,
+            kernel_virt_end_addr - kernel_virt_addr,
+        ) {
+            nd_log::error!("Not enough memory to setup paging.");
+            #[cfg(debug_assertions)]
+            nd_log::error!("  > Error: {:?}", _err);
+            crate::die();
+        }
+    }
+
+    // After this point, we can't really access any bootloader responses.
+    // This is because the pointers they give us are in the higher half direct map, which we
+    // just unmapped.
+    //
+    // For this reason, any code that needs to access the responses must be placed before this
+    // point.
+
+    // Initialize the global kernel info object.
+    //
+    // This is used throughout the kernel to access information about the kernel and the system
+    // that the kernel is running on.
+    let sys_info = unsafe {
+        SysInfoTok::initialize(SysInfo {
+            kernel_phys_addr,
+            kernel_virt_addr,
+            kernel_virt_end_addr,
+        })
+    };
+
+    let _page_allocator = unsafe { PageAllocatorTok::initialize(sys_info, page_provider) };
+
+    unsafe {
         // Enable interrupts. We're ready to be interrupted x).
         nd_x86_64::sti();
     }

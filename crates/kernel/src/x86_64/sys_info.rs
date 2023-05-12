@@ -18,6 +18,7 @@ pub struct SysInfo {
 
 impl SysInfo {
     /// Reads the kernel virtual address from the linker script.
+    #[inline(always)]
     pub fn read_kernel_virt_addr() -> VirtAddr {
         extern "C" {
             static mut __nd_image_start: u8;
@@ -27,6 +28,7 @@ impl SysInfo {
     }
 
     /// Reads the kernel end virtual address from the linker script.
+    #[inline(always)]
     pub fn read_kernel_virt_end_addr() -> VirtAddr {
         extern "C" {
             static mut __nd_image_end: u8;
