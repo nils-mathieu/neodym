@@ -4,9 +4,11 @@ use nd_x86_64::PhysAddr;
 
 pub mod mapping;
 
+mod owned_mapper;
 mod page_allocator;
 mod page_provider;
 
+pub use self::owned_mapper::*;
 pub use self::page_allocator::*;
 pub use self::page_provider::*;
 

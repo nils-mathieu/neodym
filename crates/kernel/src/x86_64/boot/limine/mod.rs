@@ -3,8 +3,12 @@
 //!
 
 use nd_limine::{File, MemMapEntryType};
+use nd_x86_64::{Cr3, Cr3Flags, PageTable, PageTableFlags, VirtAddr};
 
-use crate::x86_64::{MemorySegment, PageAllocatorTok, PageProvider, SysInfo, SysInfoTok};
+use crate::x86_64::mapping::MappingError;
+use crate::x86_64::{
+    MemorySegment, OwnedMapper, PageAllocatorTok, PageProvider, SysInfo, SysInfoTok,
+};
 
 mod req;
 
@@ -100,7 +104,12 @@ extern "C" fn entry_point_inner() -> ! {
         crate::die();
     };
 
-    let Some(_nd_init) = find_init_program() else {
+    let Some(hhdm) = req::HHDM.response() else {
+        nd_log::error!("The Limine bootloader did not provide the HHDM address.");
+        crate::die();
+    };
+
+    let Some(nd_init) = find_init_program() else {
         nd_log::error!("An `nd_init` module is expected along with the kernel.");
         nd_log::error!("Check your Limine config!");
         nd_log::error!("");
@@ -153,39 +162,7 @@ extern "C" fn entry_point_inner() -> ! {
     };
 
     let kernel_phys_addr = kernel_addr.physical_base();
-
-    // Initialize the CPU in a well-known state.
-    //
-    // SAFETY:
-    //  Thos function must only be called once. We're still in the entry point, which is only
-    //  called once by the bootloader.
-    unsafe {
-        crate::x86_64::setup_gdt();
-        crate::x86_64::setup_idt();
-        crate::x86_64::setup_system_calls();
-        crate::x86_64::initialize_lapic();
-
-        if let Err(_err) = crate::x86_64::mapping::setup_paging(
-            &page_provider,
-            &mut core::convert::identity, // Limine identity-maps the physical memory.
-            physical_memory_size,
-            kernel_phys_addr,
-            kernel_virt_addr,
-            kernel_virt_end_addr - kernel_virt_addr,
-        ) {
-            nd_log::error!("Not enough memory to setup paging.");
-            #[cfg(debug_assertions)]
-            nd_log::error!("  > Error: {:?}", _err);
-            crate::die();
-        }
-    }
-
-    // After this point, we can't really access any bootloader responses.
-    // This is because the pointers they give us are in the higher half direct map, which we
-    // just unmapped.
-    //
-    // For this reason, any code that needs to access the responses must be placed before this
-    // point.
+    let hhdm_start = hhdm.offset();
 
     // Initialize the global kernel info object.
     //
@@ -196,15 +173,128 @@ extern "C" fn entry_point_inner() -> ! {
             kernel_phys_addr,
             kernel_virt_addr,
             kernel_virt_end_addr,
+            hhdm_start,
         })
     };
 
-    let _page_allocator = unsafe { PageAllocatorTok::initialize(sys_info, page_provider) };
+    // Initialize the CPU in a well-known state.
+    //
+    // SAFETY:
+    //  Thos function must only be called once. We're still in the entry point, which is only
+    //  called once by the bootloader.
+    let pml4 = unsafe {
+        crate::x86_64::setup_gdt();
+        crate::x86_64::setup_idt();
+        crate::x86_64::setup_system_calls();
+        crate::x86_64::initialize_lapic();
+
+        match crate::x86_64::mapping::generate_page_table(
+            &page_provider,
+            &mut |phys| phys + hhdm_start,
+            physical_memory_size,
+            kernel_phys_addr,
+            kernel_virt_addr,
+            kernel_virt_end_addr - kernel_virt_addr,
+            hhdm_start,
+        ) {
+            Ok(pml4) => pml4,
+            Err(_err) => {
+                nd_log::error!("Not enough memory to setup paging.");
+                #[cfg(debug_assertions)]
+                nd_log::error!("  > Error: {:?}", _err);
+                crate::die();
+            }
+        }
+    };
+
+    let page_allocator = unsafe { PageAllocatorTok::initialize(sys_info, page_provider) };
+
+    unsafe {
+        nd_log::trace!("Switching up address space...");
+        nd_x86_64::set_cr3(Cr3::new(pml4, Cr3Flags::empty()));
+    }
 
     unsafe {
         // Enable interrupts. We're ready to be interrupted x).
         nd_x86_64::sti();
     }
 
-    todo!("Start the `nd_init` process here.");
+    match spawn_init_process(page_allocator, nd_init.data()) {
+        Ok(()) => (),
+        Err(MappingError::AlreadyMapped) => {
+            debug_assert!(
+                false,
+                "something is already mapped at the init process address"
+            );
+            unsafe { core::hint::unreachable_unchecked() };
+        }
+        Err(MappingError::OutOfPhysicalMemory) => {
+            nd_log::error!("Not enough physical memory to load `nd_init`.");
+            crate::die();
+        }
+    }
+
+    todo!();
+}
+
+/// Initializes the `nd_init` process.
+fn spawn_init_process(
+    page_allocator: PageAllocatorTok,
+    nd_init: &[u8],
+) -> Result<(), MappingError> {
+    let mut owned_mapper = OwnedMapper::new(page_allocator)?;
+
+    // Map the kernel and the init process into the address space.
+    // We know that those are always present regardless of the current address space, so we can
+    // just copy those entries from the current address space.
+    let current = unsafe {
+        &mut *((nd_x86_64::cr3().addr() + page_allocator.sys_info().hhdm_start) as *mut PageTable)
+    };
+
+    for i in 256..512 {
+        let entry = unsafe { current.get_unchecked_mut(i) };
+
+        if entry.flags().contains(PageTableFlags::PRESENT) {
+            let dst = unsafe { owned_mapper.pml4_mut().get_unchecked_mut(i) };
+            *dst = *entry;
+        }
+    }
+
+    // Map the `nd_init` process at address `0x10_0000`.
+    const LOAD_ADDR: VirtAddr = 0x10_0000;
+    const STACK_SIZE: u64 = 64 * 1024;
+    const STACK_TOP: VirtAddr = LOAD_ADDR - 0x1000;
+
+    owned_mapper.load(
+        LOAD_ADDR,
+        nd_init,
+        PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
+        PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
+    )?;
+
+    owned_mapper.load_uninit(
+        STACK_TOP - STACK_SIZE,
+        STACK_SIZE / 0x1000,
+        PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
+        PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE,
+    )?;
+
+    // Create a 64 KiB stack for the process.
+
+    unsafe { owned_mapper.switch() };
+
+    unsafe {
+        core::arch::asm!(
+            r#"
+            mov rcx, {}
+            mov rsp, {}
+            mov rbp, rsp
+            sysretq
+            "#,
+            const LOAD_ADDR,
+            const STACK_TOP,
+        );
+    }
+
+    Ok(())
 }

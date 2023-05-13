@@ -1,4 +1,4 @@
-use nd_limine::{BootloaderInfo, EntryPoint, KernelAddress, MemoryMap, Module, Request};
+use nd_limine::{BootloaderInfo, EntryPoint, Hhdm, KernelAddress, MemoryMap, Module, Request};
 
 /// Requests the bootloader to provide information about itself, such as its name and version.
 /// Those information will be logged at startup.
@@ -19,10 +19,16 @@ pub static MEMORY_MAP: Request<MemoryMap> = Request::new(MemoryMap);
 /// Requests the Limine bootloader to provide the address of the kernel in physical memory.
 pub static KERNEL_ADDR: Request<KernelAddress> = Request::new(KernelAddress);
 
+/// The Limine bootloader sets a higher-half direct map in virtual memory.
+///
+/// This request asks Limine to provide the start of this direct map.
+pub static HHDM: Request<Hhdm> = Request::new(Hhdm);
+
 nd_limine::limine_reqs!(
     MEMORY_MAP,
     BOOTLOADER_INFO,
     MODULE,
     ENTRY_POINT,
-    KERNEL_ADDR
+    KERNEL_ADDR,
+    HHDM,
 );

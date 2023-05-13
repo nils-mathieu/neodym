@@ -40,3 +40,14 @@ impl SystemCall {
         self as usize
     }
 }
+
+/// An available size for a page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PageSize {
+    /// A 4 KiB page.
+    FourKilobytes = 1,
+    /// A 2 MiB page.
+    TwoMegabytes = 2,
+    /// A 1 GiB page.
+    OneGigaBytes = 3,
+}

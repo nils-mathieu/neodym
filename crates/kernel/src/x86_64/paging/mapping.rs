@@ -1,4 +1,5 @@
-use nd_x86_64::{Cr3, Cr3Flags, PageTable, PageTableEntry, PageTableFlags, PhysAddr, VirtAddr};
+use nd_x86_64::{PageTable, PageTableEntry, PageTableFlags, PhysAddr, VirtAddr};
+use neodym_sys_common::PageSize;
 
 use super::{OutOfPhysicalMemory, PageProvider};
 
@@ -57,6 +58,7 @@ unsafe fn get_directory_entry<'a>(
     map: &mut dyn FnMut(PhysAddr) -> VirtAddr,
     provider: &PageProvider,
     index: usize,
+    flags: PageTableFlags,
 ) -> Result<&'a mut PageTableEntry, MappingError> {
     debug_assert!(index < 512);
 
@@ -69,10 +71,7 @@ unsafe fn get_directory_entry<'a>(
             core::ptr::write_bytes(map(phys_addr) as *mut u8, 0, FOUR_KILOBYTES as usize);
         }
 
-        *entry = PageTableEntry::new(
-            phys_addr,
-            PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
-        );
+        *entry = PageTableEntry::new(phys_addr, flags);
 
         Ok(entry)
     } else if entry.flags().contains(PageTableFlags::HUGE_PAGE) {
@@ -116,12 +115,14 @@ pub fn map_1g(
     map: &mut dyn FnMut(PhysAddr) -> VirtAddr,
     virt_addr: VirtAddr,
     phys_addr: PhysAddr,
+    parent_flags: PageTableFlags,
     flags: PageTableFlags,
 ) -> Result<(), MappingError> {
     debug_assert!(virt_addr % ONE_GIGABYTE == 0);
     debug_assert!(phys_addr % ONE_GIGABYTE == 0);
 
-    let pml4e = unsafe { get_directory_entry(p4, map, provider, pml4e_index(virt_addr))? };
+    let pml4e =
+        unsafe { get_directory_entry(p4, map, provider, pml4e_index(virt_addr), parent_flags)? };
     let pdpte = unsafe { get_page_entry(pml4e.addr(), map, pdpte_index(virt_addr))? };
 
     *pdpte = PageTableEntry::new(phys_addr, flags | PageTableFlags::HUGE_PAGE);
@@ -140,14 +141,23 @@ pub fn map_2m(
     map: &mut dyn FnMut(PhysAddr) -> VirtAddr,
     virt_addr: VirtAddr,
     phys_addr: PhysAddr,
+    parent_flags: PageTableFlags,
     flags: PageTableFlags,
 ) -> Result<(), MappingError> {
     debug_assert!(virt_addr % TWO_MEGABYTES == 0);
     debug_assert!(phys_addr % TWO_MEGABYTES == 0);
 
-    let pml4e = unsafe { get_directory_entry(l4, map, provider, pml4e_index(virt_addr))? };
-    let pdpte =
-        unsafe { get_directory_entry(pml4e.addr(), map, provider, pdpte_index(virt_addr))? };
+    let pml4e =
+        unsafe { get_directory_entry(l4, map, provider, pml4e_index(virt_addr), parent_flags)? };
+    let pdpte = unsafe {
+        get_directory_entry(
+            pml4e.addr(),
+            map,
+            provider,
+            pdpte_index(virt_addr),
+            parent_flags,
+        )?
+    };
     let pde = unsafe { get_page_entry(pdpte.addr(), map, pde_index(virt_addr))? };
 
     *pde = PageTableEntry::new(phys_addr, flags | PageTableFlags::HUGE_PAGE);
@@ -166,15 +176,32 @@ pub fn map_4k(
     map: &mut dyn FnMut(PhysAddr) -> VirtAddr,
     virt_addr: VirtAddr,
     phys_addr: PhysAddr,
+    parent_flags: PageTableFlags,
     flags: PageTableFlags,
 ) -> Result<(), MappingError> {
     debug_assert!(virt_addr % FOUR_KILOBYTES == 0);
     debug_assert!(phys_addr % FOUR_KILOBYTES == 0);
 
-    let pml4e = unsafe { get_directory_entry(pml4, map, provider, pml4e_index(virt_addr))? };
-    let pdpte =
-        unsafe { get_directory_entry(pml4e.addr(), map, provider, pdpte_index(virt_addr))? };
-    let pde = unsafe { get_directory_entry(pdpte.addr(), map, provider, pde_index(virt_addr))? };
+    let pml4e =
+        unsafe { get_directory_entry(pml4, map, provider, pml4e_index(virt_addr), parent_flags)? };
+    let pdpte = unsafe {
+        get_directory_entry(
+            pml4e.addr(),
+            map,
+            provider,
+            pdpte_index(virt_addr),
+            parent_flags,
+        )?
+    };
+    let pde = unsafe {
+        get_directory_entry(
+            pdpte.addr(),
+            map,
+            provider,
+            pde_index(virt_addr),
+            parent_flags,
+        )?
+    };
     let pte = unsafe { get_page_entry(pde.addr(), map, pte_index(virt_addr))? };
 
     *pte = PageTableEntry::new(phys_addr, flags);
@@ -183,6 +210,7 @@ pub fn map_4k(
 }
 
 /// Maps the provided physical addresses to the provided virtual addresses.
+#[allow(clippy::too_many_arguments)]
 pub fn map_range(
     l4: PhysAddr,
     provider: &PageProvider,
@@ -190,23 +218,24 @@ pub fn map_range(
     mut virt_addr: VirtAddr,
     mut phys_addr: PhysAddr,
     mut amount: u64,
+    parent_flags: PageTableFlags,
     flags: PageTableFlags,
 ) -> Result<(), MappingError> {
     while amount != 0 {
         if amount >= ONE_GIGABYTE {
-            map_1g(l4, provider, map, virt_addr, phys_addr, flags)?;
+            map_1g(l4, provider, map, virt_addr, phys_addr, parent_flags, flags)?;
 
             amount -= ONE_GIGABYTE;
             virt_addr += ONE_GIGABYTE;
             phys_addr += ONE_GIGABYTE;
         } else if amount >= TWO_MEGABYTES {
-            map_2m(l4, provider, map, virt_addr, phys_addr, flags)?;
+            map_2m(l4, provider, map, virt_addr, phys_addr, parent_flags, flags)?;
 
             amount -= TWO_MEGABYTES;
             virt_addr += TWO_MEGABYTES;
             phys_addr += TWO_MEGABYTES;
         } else {
-            map_4k(l4, provider, map, virt_addr, phys_addr, flags)?;
+            map_4k(l4, provider, map, virt_addr, phys_addr, parent_flags, flags)?;
 
             amount = amount.saturating_sub(FOUR_KILOBYTES);
             virt_addr += FOUR_KILOBYTES;
@@ -219,7 +248,7 @@ pub fn map_range(
 
 /// Sets an identiy map for the given L4 page table.
 ///
-/// - Memory from 0x0 to `upper_bound` is identity mapped.
+/// - Memory from `0x0` to `upper_bound` is mapped at `hhdm_start`.
 /// - The kernel is mapped at `0xFFFF_FFFF_8000_0000`.
 ///
 /// # Errors
@@ -228,19 +257,19 @@ pub fn map_range(
 ///
 /// # Safety
 ///
-///
 /// Changing the page table is unsafe.
 ///
 /// - This function should probably be called only once?
 /// - The kernel must've been compiled to be mapped at `kernel_virt`.
-pub unsafe fn setup_paging(
+pub unsafe fn generate_page_table(
     provider: &PageProvider,
     map: &mut dyn FnMut(PhysAddr) -> VirtAddr,
     upper_bound: PhysAddr,
     kernel_phys: PhysAddr,
     kernel_virt: VirtAddr,
     kernel_size: u64,
-) -> Result<(), MappingError> {
+    hhdm_start: VirtAddr,
+) -> Result<PhysAddr, MappingError> {
     nd_log::trace!("Setting up virtual memory...");
     let pml4 = provider.allocate()?;
 
@@ -249,20 +278,22 @@ pub unsafe fn setup_paging(
     }
 
     //
-    // IDENTITY MAPPING
+    // Direct Map
     //
     nd_log::trace!(
-        "  > Identity mapping physical memory up to {:#x}...",
-        upper_bound
+        "  > Mapping physical memory up to {:#x}, starting at {:#x}...",
+        upper_bound,
+        hhdm_start,
     );
     map_range(
         pml4,
         provider,
         map,
-        0,
+        hhdm_start,
         0,
         upper_bound,
         PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+        PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::GLOBAL,
     )?;
 
     //
@@ -280,13 +311,9 @@ pub unsafe fn setup_paging(
         kernel_virt,
         kernel_phys,
         kernel_size,
+        PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
         PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::GLOBAL,
     )?;
 
-    nd_log::trace!("  > Switching address space...");
-    unsafe {
-        nd_x86_64::set_cr3(Cr3::new(pml4, Cr3Flags::empty()));
-    }
-
-    Ok(())
+    Ok(pml4)
 }

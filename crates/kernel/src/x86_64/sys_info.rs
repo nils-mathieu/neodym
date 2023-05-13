@@ -14,6 +14,8 @@ pub struct SysInfo {
     pub kernel_virt_end_addr: VirtAddr,
     /// The virtual address of the kernel.
     pub kernel_virt_addr: VirtAddr,
+    /// The start of the higher-half direct map in virtual memory.
+    pub hhdm_start: VirtAddr,
 }
 
 impl SysInfo {
